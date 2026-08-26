@@ -9,4 +9,8 @@
     <RuntimeIdentifiers>win-x64</RuntimeIdentifiers>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ArchUnitSharp.Common.Tests" />
+  </ItemGroup>
+
 </Project>
