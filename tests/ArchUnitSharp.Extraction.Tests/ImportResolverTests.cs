@@ -109,6 +109,44 @@ public class ImportResolverTests
     }
 
     [Fact]
+    public void Resolve_keeps_an_unresolved_alias_rhs_as_the_external_target()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/App/Program.cs", "using Sys = System.Text; namespace MyApp.App { public class Program { } }"));
+
+        Edge edge = Assert.Single(edges);
+        Assert.Equal("src/App/Program.cs", edge.Source);
+        Assert.Equal("System.Text", edge.Target);
+        Assert.True(edge.External);
+        Assert.Equal(ImportKind.AliasUsing, edge.ImportKinds);
+    }
+
+    [Fact]
+    public void Resolve_keeps_an_unresolved_global_using_as_an_external_edge()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/App/Program.cs", "global using System.IO; namespace MyApp.App { public class Program { } }"));
+
+        Edge edge = Assert.Single(edges);
+        Assert.Equal("System.IO", edge.Target);
+        Assert.True(edge.External);
+        Assert.Equal(ImportKind.GlobalUsing, edge.ImportKinds);
+    }
+
+    [Fact]
+    public void Resolve_classifies_a_project_declared_parent_namespace_as_internal()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/Models/Car.cs", "namespace MyApp.Models { public class Car { } }"),
+            ("src/App/Program.cs", "using MyApp; namespace Other.App { public class Program { } }"));
+
+        Edge edge = Assert.Single(edges);
+        Assert.Equal("src/App/Program.cs", edge.Source);
+        Assert.Equal("src/Models/Car.cs", edge.Target);
+        Assert.False(edge.External);
+    }
+
+    [Fact]
     public void Resolve_binds_a_static_using_to_an_internal_type()
     {
         IReadOnlyList<Edge> edges = Resolve(

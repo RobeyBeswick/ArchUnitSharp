@@ -1,5 +1,20 @@
 # NOTES
 
+WHY: Round 4 — test critic (9-tests-1a) again returned no verdict (crash or timeout) with no code
+findings. The diff is 2 files / 47 lines — far too small for "too large to review in one pass". Re-ran
+the full gate clean: restore, build (0 warnings, 0 errors), format --verify-no-changes, 115 extraction
+tests + 111 common tests passed (nothing removed, nothing skipped), no vulnerable packages. This is the
+reviewer-tooling hang class documented in Rounds 2 and 3, not a code defect; there is nothing to fix.
+
+WHY: Issue 9 — internal/external classification. The resolver already sets Edge.External and keeps the
+raw module name as the target for external edges, because that is inseparable from Issue 8's "resolve
+directives to targets" (an unresolved directive had to become an external edge or no edges would be
+produced). This issue therefore lands as targeted test coverage locking in the classification: external
+edges keep the written module name for alias and global-using directives, and a project-declared parent
+namespace (e.g. `using MyApp;` where only `MyApp.Models` is declared) classifies as internal to the
+declaring file rather than external. No production change was required; the behaviour was already
+correct and verified.
+
 WHY: Issue 8 — conditional compilation. The correctness review claimed UsingDirectiveReader.Collect's
 DescendantNodes() walk gathers usings from inactive #if regions; it does not — Roslyn parses inactive
 text into disabled trivia, not syntax nodes, so such usings are already excluded from the edge set.
