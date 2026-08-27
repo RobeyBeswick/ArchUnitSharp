@@ -1,5 +1,12 @@
 # NOTES
 
+WHY: Issue 11 — the graph cache is keyed on the locator's *output* (ProjectLocation), not the
+locator's start input, because the located project fully determines the graph, re-locating is cheap,
+and the same start directory can locate different projects over time; keying on the start would
+duplicate entries and go stale when a .sln/.csproj appears above the start. The analysis toggles
+(IgnoreTestCode/IgnoreGeneratedCode) are consumed by the pipeline via SourceFileFilter, so the key's
+toggle components are honest — CheckOptions already documented those behaviours.
+
 WHY: Round 4 — test critic (9-tests-1a) again returned no verdict (crash or timeout) with no code
 findings. The diff is 2 files / 47 lines — far too small for "too large to review in one pass". Re-ran
 the full gate clean: restore, build (0 warnings, 0 errors), format --verify-no-changes, 115 extraction
