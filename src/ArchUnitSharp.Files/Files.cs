@@ -135,6 +135,18 @@ public sealed class Files
     }
 
     /// <summary>
+    /// The project's dependency graph this selection draws its files from. Internal: the depend-on
+    /// assertion reads it to compute the object's files and the dependencies between the two.
+    /// </summary>
+    internal Graph Graph => _graph;
+
+    /// <summary>
+    /// The scope's selectors, in the order they were applied. Internal: the depend-on assertion reads
+    /// them to compute the subject's dependency edges.
+    /// </summary>
+    internal IReadOnlyList<Filter> Filters => _filters;
+
+    /// <summary>
     /// Describes this selection as the scope of a rule, for a report: the entry phrase
     /// <c>project files</c> followed by one clause per selector, in the selector's own words. A
     /// selection narrowed by <c>WithName("Car.cs")</c> is described as
@@ -155,7 +167,10 @@ public sealed class Files
         return builder.ToString();
     }
 
-    private static string SelectorWord(MatchTarget target) => target switch
+    /// <summary>
+    /// The selector's own words for a match target, shared with the depend-on object's description.
+    /// </summary>
+    internal static string SelectorWord(MatchTarget target) => target switch
     {
         MatchTarget.Filename => "with name",
         MatchTarget.PathWithoutFilename => "in folder",

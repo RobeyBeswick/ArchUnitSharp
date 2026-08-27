@@ -74,6 +74,43 @@ public class ShouldNotTests
     }
 
     [Fact]
+    public void DependOn_returns_the_depend_on_predicate_for_the_negated_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            violations);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_object_that_matches_nothing_through_the_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs")))
+            .ShouldNot()
+            .DependOn()
+            .WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new EmptyTestViolation("project files should not depend on files with name 'Car.cs'"),
+            },
+            violations);
+    }
+
+    [Fact]
     public void HaveName_flags_every_file_that_matches()
     {
         var rule = new Files(Graph(Self("Car.cs"), Self("Truck.cs"))).ShouldNot().HaveName("Car.cs");
@@ -207,4 +244,7 @@ public class ShouldNotTests
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
+
+    private static Edge Using(string source, string target) =>
+        new(source, target, external: false, ImportKind.Using);
 }

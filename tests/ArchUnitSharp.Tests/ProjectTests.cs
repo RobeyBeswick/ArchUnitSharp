@@ -190,6 +190,48 @@ public class ProjectTests
     }
 
     [Fact]
+    public void ProjectFiles_should_depend_on_files_passes_when_the_dependency_exists()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_not_depend_on_files_flags_each_forbidden_dependency()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            violations);
+    }
+
+    [Fact]
     public void ProjectFiles_should_have_name_passes_when_every_file_matches()
     {
         using var project = new TempProject();

@@ -1,5 +1,18 @@
 # NOTES
 
+WHY: Issue 20 — the depend-on object exposes the same four selectors as the scope (`with name`,
+`in folder`, `in path`, `in file`), not just the three the issue enumerates, because the object is a
+file selection and the scope's selector vocabulary is the module's fixed set; a selector available on
+the scope but not on the object would make the object a different kind of selection for no gain.
+
+WHY: Issue 20 — the two moods of `depend on files` report at different granularities: the positive
+mood reports one `FileViolation` per selected file that depends on none of the object's files (the
+subject is the datum — a missing dependency has no offending target), while the negated mood reports
+one `DependencyViolation` per offending dependency edge (each offending target is a datum a report
+should name). This is ArchUnitJava's depend-on semantics. And the empty-test guard fires when the
+selection *or* the object matched nothing, so a typo in an object glob is an empty test in both moods
+rather than a silent pass (negated) or a blanket failure (positive).
+
 WHY: Issue 18 — `CycleViolation` carries the readable `Path` ("src/A.cs → src/B.cs → src/A.cs")
 alongside its data (`Files`), prose on a violation that AGENTS.md says should carry data only, because
 there is no Testing project yet to host message construction — the same exception that puts

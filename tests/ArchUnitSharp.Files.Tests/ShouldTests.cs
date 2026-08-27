@@ -169,6 +169,37 @@ public class ShouldTests
     }
 
     [Fact]
+    public void DependOn_returns_the_depend_on_predicate_for_the_positive_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        Assert.Empty(rule.Check());
+    }
+
+    [Fact]
+    public void DependOn_guards_a_selection_that_matches_nothing_through_the_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).WithName("Car.cs").Should().DependOn().WithName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new EmptyTestViolation(
+                    "project files with name 'Car.cs' should depend on files with name 'Truck.cs'"),
+            },
+            violations);
+    }
+
+    [Fact]
     public void HaveName_passes_when_every_selected_file_matches()
     {
         var rule = new Files(Graph(Self("a.cs"), Self("b.cs"))).Should().HaveName("*.cs");

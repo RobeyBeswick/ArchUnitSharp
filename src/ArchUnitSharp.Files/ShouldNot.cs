@@ -79,4 +79,13 @@ public sealed class ShouldNot
     /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
     public ICheckable BeInPath(string glob) =>
         new FilesPathRule(_files, new Filter(new Pattern(glob), MatchTarget.Path), negate: true);
+
+    /// <summary>
+    /// <c>should not depend on files</c>: no selected file may depend on any file that matches every
+    /// object selector applied to the returned object. Each offending dependency is reported as one
+    /// <see cref="DependencyViolation"/>, and the empty-test guard reports a rule whose selection or
+    /// object matched nothing.
+    /// </summary>
+    /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    public DependOn DependOn() => new(_files, negate: true);
 }

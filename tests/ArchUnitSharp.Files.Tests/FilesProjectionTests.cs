@@ -234,6 +234,182 @@ public class FilesProjectionTests
         Assert.Equal(new[] { "C/c.cs", "D/d.cs", "C/c.cs" }, cycles[1]);
     }
 
+    [Fact]
+    public void Dependencies_returns_every_edge_from_a_subject_file_to_an_object_file()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Util/Helper.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Folder("src/Models") });
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using),
+                new Edge("src/App/Program.cs", "src/Models/Truck.cs", external: false, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_ignores_edges_from_unselected_files()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/Other/Other.cs", "src/Models/Car.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Folder("src/Models") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_ignores_edges_to_unselected_files()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Util/Helper.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Folder("src/Models") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_combines_subject_filters_with_and()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Truck.cs", "src/Models/Car.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App"), Filename("Program.cs") },
+            new[] { Folder("src/Models") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_combines_object_filters_with_and()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Folder("src/Models"), Filename("Car.cs") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_ignores_self_edges()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            Array.Empty<Filter>(),
+            Array.Empty<Filter>());
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_ignores_external_edges()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            new Edge("src/App/Program.cs", "src/Models/Car.cs", external: true, ImportKind.Using));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            Array.Empty<Filter>(),
+            Array.Empty<Filter>());
+
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_result_is_sorted_by_source_then_target()
+    {
+        var graph = Graph(
+            Self("M/m.cs"),
+            Self("B/b.cs"),
+            Using("Z/z.cs", "A/a.cs"),
+            Using("A/a.cs", "M/m.cs"),
+            Using("A/a.cs", "B/b.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            Array.Empty<Filter>(),
+            Array.Empty<Filter>());
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("A/a.cs", "B/b.cs", external: false, ImportKind.Using),
+                new Edge("A/a.cs", "M/m.cs", external: false, ImportKind.Using),
+                new Edge("Z/z.cs", "A/a.cs", external: false, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_rejects_a_null_graph()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.Dependencies(null!, Array.Empty<Filter>(), Array.Empty<Filter>()));
+    }
+
+    [Fact]
+    public void Dependencies_rejects_null_subject_filters()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.Dependencies(Graph(Using("a.cs", "b.cs")), null!, Array.Empty<Filter>()));
+    }
+
+    [Fact]
+    public void Dependencies_rejects_null_object_filters()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.Dependencies(Graph(Using("a.cs", "b.cs")), Array.Empty<Filter>(), null!));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

@@ -82,6 +82,15 @@ public sealed class Should
         new FilesPathRule(_files, new Filter(new Pattern(glob), MatchTarget.Path), negate: false);
 
     /// <summary>
+    /// <c>should depend on files</c>: every selected file must depend on at least one file that
+    /// matches every object selector applied to the returned object. A selected file that depends on
+    /// none is reported as one <see cref="FileViolation"/>, and the empty-test guard reports a rule
+    /// whose selection or object matched nothing.
+    /// </summary>
+    /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    public DependOn DependOn() => new(_files, negate: false);
+
+    /// <summary>
     /// <c>should have no cycles</c>: the projected dependency graph of the selected files must be
     /// acyclic. Each cycle the selection forms is reported as one <see cref="CycleViolation"/>, and
     /// the empty-test guard reports a selection that matched nothing. This predicate exists only in

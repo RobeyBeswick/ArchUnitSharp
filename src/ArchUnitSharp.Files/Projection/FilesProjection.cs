@@ -5,9 +5,9 @@ using ArchUnitSharp.Projection;
 
 /// <summary>
 /// The files module's pure projection logic: which files of a <see cref="Graph"/> a scope's list of
-/// <see cref="Filter"/> instances selects, and which cycles the selected files' dependencies form.
-/// Filters combine with AND — a file is selected when every filter matches it — and the empty filter
-/// list selects every file.
+/// <see cref="Filter"/> instances selects, which cycles the selected files' dependencies form, and
+/// which of their edges are the dependencies of a depend-on rule. Filters combine with AND — a file
+/// is selected when every filter matches it — and the empty filter list selects every file.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -76,6 +76,40 @@ internal static class FilesProjection
         return ArchUnitSharp.Projection.Projection
             .Cycles(subgraph, MapFunctions.Identity)
             .Select(ClosedPath)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the dependency edges of a <c>should (not) depend on files</c> rule: every edge from a
+    /// file the <paramref name="subjectFilters"/> select to a file the
+    /// <paramref name="objectFilters"/> select. A self-edge is not a dependency — a file never depends
+    /// on itself — and an external edge's target is not a file, so neither is ever returned. The
+    /// result is sorted by source then target, so reports are reproducible.
+    /// </summary>
+    /// <param name="graph">The project's dependency graph. Must not be <see langword="null"/>.</param>
+    /// <param name="subjectFilters">The rule's subject selectors. Must not be <see langword="null"/>.</param>
+    /// <param name="objectFilters">The rule's object selectors. Must not be <see langword="null"/>.</param>
+    /// <returns>The subject-to-object dependency edges, sorted by source then target.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="graph"/>, <paramref name="subjectFilters"/> or <paramref name="objectFilters"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<Edge> Dependencies(
+        Graph graph,
+        IReadOnlyList<Filter> subjectFilters,
+        IReadOnlyList<Filter> objectFilters)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(subjectFilters);
+        ArgumentNullException.ThrowIfNull(objectFilters);
+
+        var subject = new HashSet<string>(Select(graph, subjectFilters), StringComparer.Ordinal);
+        var objects = new HashSet<string>(Select(graph, objectFilters), StringComparer.Ordinal);
+
+        return graph.Edges
+            .Where(edge => edge.Source != edge.Target
+                && !edge.External
+                && subject.Contains(edge.Source)
+                && objects.Contains(edge.Target))
+            .OrderBy(static edge => edge.Source, StringComparer.Ordinal)
+            .ThenBy(static edge => edge.Target, StringComparer.Ordinal)
             .ToArray();
     }
 

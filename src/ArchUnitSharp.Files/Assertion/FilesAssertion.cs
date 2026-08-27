@@ -1,6 +1,7 @@
 namespace ArchUnitSharp.Files.Assertion;
 
 using ArchUnitSharp.Common.Extraction;
+using ArchUnitSharp.Files.Projection;
 
 /// <summary>
 /// The files module's shared assertion: the one place a files rule's outcome is computed. The mood of
@@ -19,8 +20,12 @@ using ArchUnitSharp.Common.Extraction;
 /// predicates — <c>should (not) have name</c>, <c>should (not) be in folder</c>,
 /// <c>should (not) be in path</c> — match each selected file's name, folder or path against the
 /// rule's glob and yield one <see cref="FileViolation"/> per file that violates the mood, in either
-/// mood. A selection whose dependencies form a cycle yields one <see cref="CycleViolation"/> per
-/// cycle.
+/// mood. The depend-on predicate — <c>should (not) depend on files</c> — matches each selected
+/// file's dependencies against the object's selectors and yields one <see cref="FileViolation"/> per
+/// selected file that depends on none of them (positive mood) or one
+/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports
+/// a rule whose selection or object matched nothing. A selection whose dependencies form a cycle
+/// yields one <see cref="CycleViolation"/> per cycle.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
@@ -153,6 +158,57 @@ internal static class FilesAssertion
     /// <exception cref="ArgumentNullException"><paramref name="files"/> or <paramref name="filter"/> is <see langword="null"/>.</exception>
     public static IReadOnlyList<Violation> BeInPath(Files files, Filter filter, bool negate, CheckOptions? options) =>
         Match(files, filter, "be in path", negate, options);
+
+    /// <summary>
+    /// Checks a <c>should depend on files</c> / <c>should not depend on files</c> rule: each selected
+    /// file's dependencies are matched against the rule's object selectors. With the positive mood a
+    /// selected file that depends on no file matching every object selector is reported as one
+    /// <see cref="FileViolation"/>; with the negated mood each dependency on a file matching every
+    /// object selector is reported as one <see cref="DependencyViolation"/>. The empty-test guard
+    /// reports a rule whose selection or object matched nothing.
+    /// </summary>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<Violation> DependOn(DependOn rule, CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        Files files = rule.Subject;
+        IReadOnlyList<string> subject = files.Select();
+        IReadOnlyList<string> objects = FilesProjection.Select(files.Graph, rule.ObjectFilters);
+
+        if (subject.Count == 0 || objects.Count == 0)
+        {
+            if (options?.AllowEmptyTests == true)
+            {
+                return new Violation[0];
+            }
+
+            string description =
+                $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
+            return new Violation[] { new EmptyTestViolation(description) };
+        }
+
+        IReadOnlyList<Edge> dependencies =
+            FilesProjection.Dependencies(files.Graph, files.Filters, rule.ObjectFilters);
+
+        if (rule.Negate)
+        {
+            return dependencies
+                .Select(static edge => (Violation)new DependencyViolation(edge.Source, edge.Target))
+                .ToArray();
+        }
+
+        var satisfied = new HashSet<string>(
+            dependencies.Select(static edge => edge.Source),
+            StringComparer.Ordinal);
+        return subject
+            .Where(file => !satisfied.Contains(file))
+            .Select(static file => (Violation)new FileViolation(file))
+            .ToArray();
+    }
 
     private static IReadOnlyList<Violation> Match(
         Files files,

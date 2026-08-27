@@ -538,6 +538,291 @@ public class FilesAssertionTests
             FilesAssertion.BeInPath(new Files(Graph(Self("Car.cs"))), null!, negate: false, options: null));
     }
 
+    [Fact]
+    public void DependOn_passes_when_every_subject_depends_on_an_object_file()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Truck.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Truck.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOn_flags_a_subject_file_that_depends_on_nothing()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Orphan.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Orphan.cs") }, violations);
+    }
+
+    [Fact]
+    public void DependOn_flags_a_subject_file_whose_dependencies_miss_the_object()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Util/Helper.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Util/Helper.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void DependOn_passes_a_subject_file_that_also_depends_on_non_object_files()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Util/Helper.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Util/Helper.cs"),
+            Using("src/App/Program.cs", "System")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOn_reports_violations_in_subject_order()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Alpha.cs"),
+            Self("src/App/Mike.cs"),
+            Self("src/App/Zeta.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Util/Helper.cs"),
+            Using("src/App/Alpha.cs", "src/Util/Helper.cs"),
+            Using("src/App/Mike.cs", "src/Util/Helper.cs"),
+            Using("src/App/Zeta.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Equal(
+            new[] { "src/App/Alpha.cs", "src/App/Mike.cs" },
+            violations.Select(static v => ((FileViolation)v).File));
+    }
+
+    [Fact]
+    public void DependOn_flags_each_offending_dependency_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs"),
+                new DependencyViolation("src/App/Program.cs", "src/Models/Truck.cs"),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void DependOn_passes_when_no_subject_depends_on_an_object_file_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Util/Helper.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Util/Helper.cs")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_empty_selection_with_the_positive_mood()
+    {
+        var rule = new Files(Graph()).Should().DependOn().InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal(
+            "project files should depend on files in folder 'src/Models'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_empty_selection_with_the_negated_mood()
+    {
+        var rule = new Files(Graph()).ShouldNot().DependOn().InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not depend on files in folder 'src/Models'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_empty_selection_with_a_matching_object_with_the_positive_mood()
+    {
+        var rule = new Files(Graph(Self("src/Models/Truck.cs")))
+            .WithName("Car.cs")
+            .Should()
+            .DependOn()
+            .WithName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal(
+            "project files with name 'Car.cs' should depend on files with name 'Truck.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_empty_selection_with_a_matching_object_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(Self("src/Models/Truck.cs")))
+            .WithName("Car.cs")
+            .ShouldNot()
+            .DependOn()
+            .WithName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal(
+            "project files with name 'Car.cs' should not depend on files with name 'Truck.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_object_that_matches_nothing_with_the_positive_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs")))
+            .Should()
+            .DependOn()
+            .WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should depend on files with name 'Car.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_guards_an_object_that_matches_nothing_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs")))
+            .ShouldNot()
+            .DependOn()
+            .WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not depend on files with name 'Car.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void The_depend_on_guard_names_the_selectors_of_both_selection_and_object()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs")))
+            .WithName("Car.cs")
+            .ShouldNot()
+            .DependOn()
+            .WithName("Truck.cs")
+            .InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files with name 'Car.cs' should not depend on files with name 'Truck.cs' in folder 'src/Models'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOn_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        var rule = new Files(Graph()).Should().DependOn().WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(
+            rule,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOn_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).ShouldNot().DependOn().WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOn(
+            rule,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOn_rejects_a_null_rule()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesAssertion.DependOn(null!, options: null));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
