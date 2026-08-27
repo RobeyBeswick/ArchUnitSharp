@@ -21,6 +21,12 @@ using Microsoft.CodeAnalysis.CSharp;
 /// and reports built from it are reproducible.
 /// </para>
 /// <para>
+/// The per-line ignore convention that excludes a directive from the graph is not applied here. This
+/// is the syntactic listing of what the file's directives carry: a directive marked
+/// <c>// archunit: ignore</c> still appears among the imports, and whether it becomes an edge is
+/// <see cref="ImportResolver"/>'s decision.
+/// </para>
+/// <para>
 /// This type is stateless and safe for concurrent use. The list it returns is a fresh copy on every
 /// call, and the <see cref="Import"/> values in it are immutable.
 /// </para>

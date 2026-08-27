@@ -228,6 +228,64 @@ public class ImportResolverTests
     }
 
     [Fact]
+    public void Resolve_drops_a_directive_marked_with_an_inline_ignore_comment()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/App/Program.cs",
+             "using MyApp.Models; // archunit: ignore\nnamespace MyApp.App { public class Program { } }"));
+
+        Assert.Empty(edges);
+    }
+
+    [Fact]
+    public void Resolve_drops_a_directive_preceded_by_a_standalone_ignore_comment()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/App/Program.cs",
+             "// archunit: ignore\nusing MyApp.Models;\nnamespace MyApp.App { public class Program { } }"));
+
+        Assert.Empty(edges);
+    }
+
+    [Fact]
+    public void Resolve_drops_only_the_directive_whose_line_the_comment_trails()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/App/Program.cs",
+             "using System; using MyApp.Models; // archunit: ignore\nnamespace MyApp.App { public class Program { } }"));
+
+        Edge edge = Assert.Single(edges);
+        Assert.Equal("src/App/Program.cs", edge.Source);
+        Assert.Equal("System", edge.Target);
+        Assert.True(edge.External);
+    }
+
+    [Fact]
+    public void Resolve_drops_a_scoped_directive_when_the_module_matches()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/Models/Car.cs", "namespace MyApp.Models { public class Car { } }"),
+            ("src/App/Program.cs",
+             "using MyApp.Models; // archunit: ignore MyApp.Models\nnamespace MyApp.App { public class Program { } }"));
+
+        Assert.Empty(edges);
+    }
+
+    [Fact]
+    public void Resolve_keeps_a_scoped_directive_when_the_module_does_not_match()
+    {
+        IReadOnlyList<Edge> edges = Resolve(
+            ("src/Models/Car.cs", "namespace MyApp.Models { public class Car { } }"),
+            ("src/App/Program.cs",
+             "using MyApp.Models; // archunit: ignore Other.App\nnamespace MyApp.App { public class Program { } }"));
+
+        Edge edge = Assert.Single(edges);
+        Assert.Equal("src/App/Program.cs", edge.Source);
+        Assert.Equal("src/Models/Car.cs", edge.Target);
+        Assert.False(edge.External);
+    }
+
+    [Fact]
     public void Resolve_produces_no_edges_from_a_file_with_no_usings()
     {
         IReadOnlyList<Edge> edges = Resolve(

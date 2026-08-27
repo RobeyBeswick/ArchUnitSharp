@@ -38,6 +38,15 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// rather than a silent accident.
 /// </para>
 /// <para>
+/// A per-line ignore convention excludes a single directive from the graph: a
+/// <c>// archunit: ignore</c> comment on the directive's own line, or on the line immediately above
+/// it, drops the directive entirely — it produces no edge, internal or external. The directive can
+/// be scoped to named namespaces by listing them after <c>ignore</c> —
+/// <c>// archunit: ignore MyApp.Models</c> — which drops the directive only when its referenced name
+/// is one of the listed names or lies beneath one. See <see cref="IgnoreDirectiveReader"/> for the
+/// full convention.
+/// </para>
+/// <para>
 /// Edges are returned sorted by source, then target, then import kind, so the output is stable and
 /// reports built from it are reproducible. Parallel edges are not merged here and self-edges are not
 /// added here; <see cref="ImportEdgeNormaliser"/> turns this raw output into the canonical edge set.
@@ -104,6 +113,11 @@ public static class ImportResolver
             SemanticModel model = compilation.GetSemanticModel(tree);
             foreach (UsingDirectiveSyntax directive in UsingDirectiveReader.Collect(tree))
             {
+                if (IgnoreDirectiveReader.ShouldIgnore(directive))
+                {
+                    continue;
+                }
+
                 (ImportKind kind, string name) = UsingDirectiveReader.Describe(directive);
                 ISymbol? symbol = model.GetSymbolInfo(directive.Name!).Symbol;
 

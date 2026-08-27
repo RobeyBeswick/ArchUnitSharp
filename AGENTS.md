@@ -23,7 +23,7 @@ has a test project beside it in `tests/`.
 |---|---|
 | `src/ArchUnitSharp` | The public surface and composition root: the entry points (`project files`, `layers`, …), `CheckOptions`, and the wiring that connects the domain modules. Nothing else imports this project. |
 | `src/ArchUnitSharp.Common` | The kernel: `Edge`, `Graph`, `ImportKind`, `Pattern`/`Filter`, `RegexFactory`, `Violation`, `Checkable`, `TechnicalError`/`UserError`. Lives in the `Common.Extraction` namespace where issue 1 places it. |
-| `src/ArchUnitSharp.Extraction` | Reads the C# source tree: project location, source enumeration, import parsing, internal/external classification, self-edges, parallel-edge merging, the graph cache. |
+| `src/ArchUnitSharp.Extraction` | Reads the C# source tree: project location, source enumeration, import parsing, internal/external classification, per-line ignore directives, self-edges, parallel-edge merging, the graph cache. |
 | `src/ArchUnitSharp.Projection` | Pure graph work: projecting edges, nodes and cycles; the per-edge map functions; Tarjan and Johnson cycle detection. |
 | `src/ArchUnitSharp.Testing` | Violation formatting, result shaping, and the framework-agnostic assert helper. |
 | `src/ArchUnitSharp.Files` | The files domain module. |

@@ -97,6 +97,38 @@ public class ImportExtractorTests
     }
 
     [Fact]
+    public void Extract_drops_a_directive_marked_with_an_ignore_comment()
+    {
+        using var project = new TempProject();
+        project.WriteFile("src/Models/Car.cs", "namespace MyApp.Models { public class Car { } }");
+        project.WriteFile(
+            "src/App/Program.cs",
+            "using MyApp.Models; // archunit: ignore\nnamespace MyApp.App { public class Program { } }");
+
+        IReadOnlyList<Edge> edges = ImportExtractor.Extract(Enumerate(project));
+
+        Assert.Equal(2, edges.Count);
+        Assert.All(edges, edge => Assert.Equal(edge.Source, edge.Target));
+        Assert.DoesNotContain(edges, edge => edge.Target == "src/Models/Car.cs" && edge.Source != edge.Target);
+    }
+
+    [Fact]
+    public void Extract_keeps_a_scoped_directive_when_the_module_does_not_match()
+    {
+        using var project = new TempProject();
+        project.WriteFile("src/Models/Car.cs", "namespace MyApp.Models { public class Car { } }");
+        project.WriteFile(
+            "src/App/Program.cs",
+            "using MyApp.Models; // archunit: ignore Other.App\nnamespace MyApp.App { public class Program { } }");
+
+        IReadOnlyList<Edge> edges = ImportExtractor.Extract(Enumerate(project));
+
+        Edge edge = Assert.Single(edges, edge => edge.Target == "src/Models/Car.cs" && edge.Source != edge.Target);
+        Assert.Equal("src/App/Program.cs", edge.Source);
+        Assert.False(edge.External);
+    }
+
+    [Fact]
     public void Extract_throws_technical_error_when_a_file_cannot_be_read()
     {
         var missing = new SourceFile("src/missing.cs", "/nonexistent/src/missing.cs");

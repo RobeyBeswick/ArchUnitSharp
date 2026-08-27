@@ -1,5 +1,11 @@
 # NOTES
 
+WHY: Issue 12 — the per-line ignore directive renders ArchUnitPython's `# archunit: ignore` as the C#
+line-comment idiom `// archunit: ignore`, and "named modules" maps to the *referenced namespace/type*
+written on the `using` line (the graph has files, not modules), scoped by exact-or-prefix match as
+ArchUnitPython scopes module names. The parenthetical-reason clause `ignore(...)` in ArchUnitPython's
+regex is dropped: it is undocumented there and adds a fragile match form for no surface value.
+
 WHY: Issue 11 — the graph cache is keyed on the locator's *output* (ProjectLocation), not the
 locator's start input, because the located project fully determines the graph, re-locating is cheap,
 and the same start directory can locate different projects over time; keying on the start would

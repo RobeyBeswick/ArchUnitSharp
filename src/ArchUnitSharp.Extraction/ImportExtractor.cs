@@ -21,6 +21,11 @@ using ArchUnitSharp.Common.Extraction;
 /// kinds unioned, so <c>(source, target)</c> is unique. The result is sorted.
 /// </para>
 /// <para>
+/// Directives marked with the per-line ignore convention — a <c>// archunit: ignore</c> comment on
+/// the directive's line or the line immediately above — produce no edges; see
+/// <see cref="ImportResolver"/>.
+/// </para>
+/// <para>
 /// This type is stateless and safe for concurrent use. The list it returns is a fresh copy on every
 /// call, and the <see cref="Edge"/> values in it are immutable.
 /// </para>
