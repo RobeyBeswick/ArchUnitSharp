@@ -168,6 +168,204 @@ public class ShouldTests
         Assert.NotSame(first, second);
     }
 
+    [Fact]
+    public void HaveName_passes_when_every_selected_file_matches()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs"))).Should().HaveName("*.cs");
+
+        Assert.Empty(rule.Check());
+    }
+
+    [Fact]
+    public void HaveName_flags_every_file_that_does_not_match()
+    {
+        var rule = new Files(Graph(Self("Car.cs"), Self("Truck.cs"))).Should().HaveName("Car.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(new[] { new FileViolation("Truck.cs") }, violations);
+    }
+
+    [Fact]
+    public void HaveName_after_selectors_checks_only_the_selected_files()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Self("src/App/Program.cs"))).InFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = files.Should().HaveName("Car.cs").Check();
+
+        Assert.Equal(new[] { new FileViolation("src/Models/Truck.cs") }, violations);
+    }
+
+    [Fact]
+    public void HaveName_guards_a_selection_that_matches_nothing()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).WithName("Car.cs").Should().HaveName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should have name 'Truck.cs'") },
+            violations);
+    }
+
+    [Fact]
+    public void HaveName_honours_allow_empty_tests()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).WithName("Car.cs").Should().HaveName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check(new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void HaveName_rejects_a_null_glob()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs"))).Should().HaveName(null!));
+    }
+
+    [Fact]
+    public void HaveName_rejects_an_empty_glob()
+    {
+        Assert.Throws<ArgumentException>(() => new Files(Graph(Self("a.cs"))).Should().HaveName(string.Empty));
+    }
+
+    [Fact]
+    public void BeInFolder_passes_when_every_selected_file_is_in_the_folder()
+    {
+        var rule = new Files(Graph(Self("src/Models/Car.cs"), Self("src/Models/Truck.cs")))
+            .Should().BeInFolder("src/Models");
+
+        Assert.Empty(rule.Check());
+    }
+
+    [Fact]
+    public void BeInFolder_flags_every_file_that_is_not_in_the_folder()
+    {
+        var rule = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")))
+            .Should().BeInFolder("src/Models");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInFolder_guards_a_selection_that_matches_nothing()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).InFolder("src/Models").Should().BeInFolder("src/App");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files in folder 'src/Models' should be in folder 'src/App'") },
+            violations);
+    }
+
+    [Fact]
+    public void BeInFolder_honours_allow_empty_tests()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).InFolder("src/Models").Should().BeInFolder("src/App");
+
+        IReadOnlyList<Violation> violations = rule.Check(new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInFolder_rejects_a_null_glob()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs"))).Should().BeInFolder(null!));
+    }
+
+    [Fact]
+    public void BeInFolder_rejects_an_empty_glob()
+    {
+        Assert.Throws<ArgumentException>(() => new Files(Graph(Self("a.cs"))).Should().BeInFolder(string.Empty));
+    }
+
+    [Fact]
+    public void BeInPath_passes_when_every_selected_file_is_at_the_path()
+    {
+        var rule = new Files(Graph(Self("src/Models/Car.cs")))
+            .Should().BeInPath("src/Models/Car.cs");
+
+        Assert.Empty(rule.Check());
+    }
+
+    [Fact]
+    public void BeInPath_flags_every_file_that_is_not_at_the_path()
+    {
+        var rule = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")))
+            .Should().BeInPath("src/Models/Car.cs");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInPath_guards_a_selection_that_matches_nothing()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).InPath("src/Models/Car.cs").Should().BeInPath("src/App");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files in path 'src/Models/Car.cs' should be in path 'src/App'") },
+            violations);
+    }
+
+    [Fact]
+    public void BeInPath_honours_allow_empty_tests()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).InPath("src/Models/Car.cs").Should().BeInPath("src/App");
+
+        IReadOnlyList<Violation> violations = rule.Check(new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInPath_rejects_a_null_glob()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs"))).Should().BeInPath(null!));
+    }
+
+    [Fact]
+    public void BeInPath_rejects_an_empty_glob()
+    {
+        Assert.Throws<ArgumentException>(() => new Files(Graph(Self("a.cs"))).Should().BeInPath(string.Empty));
+    }
+
+    [Fact]
+    public void Two_name_rules_off_one_selection_do_not_see_each_other()
+    {
+        var files = new Files(Graph(Self("Car.cs"), Self("Truck.cs")));
+
+        var cars = files.Should().HaveName("Car.cs");
+        var trucks = files.Should().HaveName("Truck.cs");
+
+        Assert.Equal(new[] { new FileViolation("Truck.cs") }, cars.Check());
+        Assert.Equal(new[] { new FileViolation("Car.cs") }, trucks.Check());
+        Assert.Equal(new[] { "Car.cs", "Truck.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void A_have_name_rule_can_be_checked_twice_and_reports_the_same_result()
+    {
+        var rule = new Files(Graph(Self("Car.cs"), Self("Truck.cs"))).Should().HaveName("Car.cs");
+
+        IReadOnlyList<Violation> first = rule.Check();
+        IReadOnlyList<Violation> second = rule.Check();
+
+        Assert.Equal(first, second);
+        Assert.NotSame(first, second);
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

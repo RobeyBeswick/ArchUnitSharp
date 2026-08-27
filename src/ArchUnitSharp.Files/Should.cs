@@ -40,6 +40,48 @@ public sealed class Should
     public ICheckable Exist() => new FilesExistRule(_files, negate: false);
 
     /// <summary>
+    /// <c>should have name</c>: every selected file must have a name matching <paramref name="glob"/>,
+    /// where the name is the file's identifier with no directory part, so a file identified by
+    /// <c>src/Models/Car.cs</c> has the name <c>Car.cs</c>. A selected file whose name does not match
+    /// is reported as one <see cref="FileViolation"/>, and the empty-test guard reports a selection
+    /// that matched nothing.
+    /// </summary>
+    /// <param name="glob">The glob to match each selected file's name against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    public ICheckable HaveName(string glob) =>
+        new FilesNameRule(_files, new Filter(new Pattern(glob), MatchTarget.Filename), negate: false);
+
+    /// <summary>
+    /// <c>should be in folder</c>: every selected file must sit in a folder matching
+    /// <paramref name="glob"/>. The folder is the file's identifier with its name removed, so a file
+    /// identified by <c>src/Models/Car.cs</c> sits in the folder <c>src/Models</c>. A selected file
+    /// whose folder does not match is reported as one <see cref="FileViolation"/>, and the empty-test
+    /// guard reports a selection that matched nothing.
+    /// </summary>
+    /// <param name="glob">The glob to match each selected file's folder against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    public ICheckable BeInFolder(string glob) =>
+        new FilesFolderRule(_files, new Filter(new Pattern(glob), MatchTarget.PathWithoutFilename), negate: false);
+
+    /// <summary>
+    /// <c>should be in path</c>: every selected file must be at a path matching <paramref name="glob"/>.
+    /// The path is the file's project-relative identifier, folders and name together, so a file
+    /// identified by <c>src/Models/Car.cs</c> is at the path <c>src/Models/Car.cs</c>. A selected file
+    /// whose path does not match is reported as one <see cref="FileViolation"/>, and the empty-test
+    /// guard reports a selection that matched nothing.
+    /// </summary>
+    /// <param name="glob">The glob to match each selected file's whole path against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    public ICheckable BeInPath(string glob) =>
+        new FilesPathRule(_files, new Filter(new Pattern(glob), MatchTarget.Path), negate: false);
+
+    /// <summary>
     /// <c>should have no cycles</c>: the projected dependency graph of the selected files must be
     /// acyclic. Each cycle the selection forms is reported as one <see cref="CycleViolation"/>, and
     /// the empty-test guard reports a selection that matched nothing. This predicate exists only in

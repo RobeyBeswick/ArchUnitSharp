@@ -188,4 +188,76 @@ public class ProjectTests
         var cycle = Assert.Single(violations);
         Assert.Equal("src/A.cs → src/B.cs → src/A.cs", Assert.IsType<CycleViolation>(cycle).Path);
     }
+
+    [Fact]
+    public void ProjectFiles_should_have_name_passes_when_every_file_matches()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .HaveName("*.cs")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_be_in_folder_passes_when_every_file_is_in_the_folder()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+        project.WriteFile("src/Models/Truck.cs", "namespace App.Models { public class Truck { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .BeInFolder("src/Models")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_be_in_path_flags_a_file_outside_the_path()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .BeInPath("src/Models/Car.cs")
+            .Check();
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void Files_should_not_have_name_flags_the_matching_files()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.Files(location)
+            .ShouldNot()
+            .HaveName("Car.cs")
+            .Check();
+
+        Assert.Equal(new[] { new FileViolation("src/Models/Car.cs") }, violations);
+    }
 }

@@ -201,10 +201,353 @@ public class FilesAssertionTests
         Assert.Throws<ArgumentNullException>(() => FilesAssertion.Cycles(null!, options: null));
     }
 
+    [Fact]
+    public void HaveName_passes_every_file_whose_name_matches()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("*.cs"), negate: false, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void HaveName_flags_every_file_whose_name_does_not_match()
+    {
+        var files = new Files(Graph(Self("Car.cs"), Self("Truck.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: false, options: null);
+
+        Assert.Equal(new[] { new FileViolation("Truck.cs") }, violations);
+    }
+
+    [Fact]
+    public void HaveName_matches_the_name_not_the_folder_or_path()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/App/Car.cs"),
+            Self("src/App/Program.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: false, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void HaveName_flags_every_file_whose_name_matches_with_the_negated_mood()
+    {
+        var files = new Files(Graph(Self("Car.cs"), Self("Truck.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: true, options: null);
+
+        Assert.Equal(new[] { new FileViolation("Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void The_mood_flag_is_the_only_difference_between_the_two_have_name_moods()
+    {
+        var files = new Files(Graph(Self("Car.cs"), Self("Truck.cs")));
+
+        IReadOnlyList<Violation> positive = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: false, options: null);
+        IReadOnlyList<Violation> negated = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: true, options: null);
+
+        Assert.Equal(new[] { new FileViolation("Truck.cs") }, positive);
+        Assert.Equal(new[] { new FileViolation("Car.cs") }, negated);
+    }
+
+    [Fact]
+    public void HaveName_returns_violations_in_selection_order()
+    {
+        var files = new Files(Graph(Self("Z/z.cs"), Self("A/a.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: false, options: null);
+
+        Assert.Equal(
+            new[] { "A/a.cs", "Z/z.cs" },
+            violations.Select(static v => ((FileViolation)v).File));
+    }
+
+    [Fact]
+    public void HaveName_guards_an_empty_selection_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            new Files(Graph()), NameFilter("Car.cs"), negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal("project files should have name 'Car.cs'", Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void HaveName_guards_an_empty_selection_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            new Files(Graph()), NameFilter("Car.cs"), negate: true, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal("project files should not have name 'Car.cs'", Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void The_have_name_guard_names_the_selectors_that_left_the_selection_empty()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.cs"))).WithName("Truck.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            files, NameFilter("Car.cs"), negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files with name 'Truck.cs' should have name 'Car.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void HaveName_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            new Files(Graph()),
+            NameFilter("Car.cs"),
+            negate: false,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void HaveName_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.HaveName(
+            new Files(Graph()),
+            NameFilter("Car.cs"),
+            negate: true,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void HaveName_rejects_a_null_files_selection()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.HaveName(null!, NameFilter("Car.cs"), negate: false, options: null));
+    }
+
+    [Fact]
+    public void HaveName_rejects_a_null_filter()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.HaveName(new Files(Graph(Self("Car.cs"))), null!, negate: false, options: null));
+    }
+
+    [Fact]
+    public void BeInFolder_passes_every_file_whose_folder_matches()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/Models/Truck.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            files, FolderFilter("src/Models"), negate: false, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInFolder_matches_the_folder_not_the_file_name()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Car.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            files, FolderFilter("src/Models"), negate: false, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInFolder_flags_every_file_in_the_folder_with_the_negated_mood()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            files, FolderFilter("src/Models"), negate: true, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/Models/Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInFolder_guards_an_empty_selection_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            new Files(Graph()), FolderFilter("src/Models"), negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should be in folder 'src/Models'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void BeInFolder_guards_an_empty_selection_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            new Files(Graph()), FolderFilter("src/Models"), negate: true, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not be in folder 'src/Models'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void BeInFolder_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            new Files(Graph()),
+            FolderFilter("src/Models"),
+            negate: false,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInFolder_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInFolder(
+            new Files(Graph()),
+            FolderFilter("src/Models"),
+            negate: true,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInFolder_rejects_a_null_files_selection()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.BeInFolder(null!, FolderFilter("src/Models"), negate: false, options: null));
+    }
+
+    [Fact]
+    public void BeInFolder_rejects_a_null_filter()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.BeInFolder(new Files(Graph(Self("Car.cs"))), null!, negate: false, options: null));
+    }
+
+    [Fact]
+    public void BeInPath_passes_a_file_whose_path_matches()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            files, PathFilter("src/Models/Car.cs"), negate: false, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInPath_matches_the_whole_path_not_just_the_name()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Car.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            files, PathFilter("src/Models/Car.cs"), negate: false, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInPath_flags_every_file_at_the_path_with_the_negated_mood()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            files, PathFilter("src/Models/Car.cs"), negate: true, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/Models/Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void BeInPath_guards_an_empty_selection_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            new Files(Graph()), PathFilter("src/Models/Car.cs"), negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should be in path 'src/Models/Car.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void BeInPath_guards_an_empty_selection_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            new Files(Graph()), PathFilter("src/Models/Car.cs"), negate: true, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not be in path 'src/Models/Car.cs'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void BeInPath_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            new Files(Graph()),
+            PathFilter("src/Models/Car.cs"),
+            negate: false,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInPath_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.BeInPath(
+            new Files(Graph()),
+            PathFilter("src/Models/Car.cs"),
+            negate: true,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void BeInPath_rejects_a_null_files_selection()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.BeInPath(null!, PathFilter("src/Models/Car.cs"), negate: false, options: null));
+    }
+
+    [Fact]
+    public void BeInPath_rejects_a_null_filter()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.BeInPath(new Files(Graph(Self("Car.cs"))), null!, negate: false, options: null));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
 
     private static Edge Using(string source, string target) =>
         new(source, target, external: false, ImportKind.Using);
+
+    private static Filter NameFilter(string glob) => new(new Pattern(glob), MatchTarget.Filename);
+
+    private static Filter FolderFilter(string glob) => new(new Pattern(glob), MatchTarget.PathWithoutFilename);
+
+    private static Filter PathFilter(string glob) => new(new Pattern(glob), MatchTarget.Path);
 }

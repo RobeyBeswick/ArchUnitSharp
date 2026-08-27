@@ -5,7 +5,9 @@ using ArchUnitSharp.Common.Extraction;
 /// <summary>
 /// A violation produced by a files rule predicate: the checked value — a file identifier — did not
 /// satisfy the rule. A <c>should not exist</c> rule reports one of these per selected file, carrying
-/// the file that exists although the rule says it must not.
+/// a file that exists although the rule says it must not; the naming and location rules —
+/// <c>should (not) have name</c>, <c>should (not) be in folder</c>, <c>should (not) be in path</c> —
+/// report one per selected file whose name, folder or path contradicts the mood.
 /// </summary>
 /// <remarks>
 /// <para>
