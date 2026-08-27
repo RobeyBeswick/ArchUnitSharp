@@ -83,9 +83,72 @@ public class RuleAssertTests
     }
 
     [Fact]
-    public void A_null_rule_is_rejected()
+    public void A_failing_rule_makes_Fails_return_normally()
+    {
+        var rule = new ArchUnitSharp.Files.Files(Graph(Self("src/App/Program.cs")))
+            .Should()
+            .HaveName("Car.cs");
+
+        RuleAssert.Fails(rule);
+    }
+
+    [Fact]
+    public void A_passing_rule_makes_Fails_raise_the_unexpected_pass_message()
+    {
+        var rule = new ArchUnitSharp.Files.Files(Graph(Self("src/App/Program.cs"))).Should().Exist();
+
+        AssertionFailedException failure =
+            Assert.Throws<AssertionFailedException>(() => RuleAssert.Fails(rule));
+
+        Assert.Equal("The rule passed, but the assertion expected it to fail.", failure.Message);
+        Assert.False(failure.Result.Passed);
+    }
+
+    [Fact]
+    public void A_rule_that_matches_nothing_makes_Fails_pass_by_default()
+    {
+        var rule = new ArchUnitSharp.Files.Files(Graph(Self("src/Models/Car.cs")))
+            .InPath("src/NoSuchFile.cs")
+            .Should()
+            .Exist();
+
+        RuleAssert.Fails(rule);
+    }
+
+    [Fact]
+    public void AllowEmptyTests_makes_an_empty_rule_pass_so_Fails_raises()
+    {
+        var rule = new ArchUnitSharp.Files.Files(Graph(Self("src/Models/Car.cs")))
+            .InPath("src/NoSuchFile.cs")
+            .Should()
+            .Exist();
+
+        AssertionFailedException failure = Assert.Throws<AssertionFailedException>(
+            () => RuleAssert.Fails(rule, new CheckOptions { AllowEmptyTests = true }));
+
+        Assert.Equal("The rule passed, but the assertion expected it to fail.", failure.Message);
+    }
+
+    [Fact]
+    public void Fails_propagates_a_user_error_from_the_check_unchanged()
+    {
+        var rule = new ArchUnitSharp.Files.Files(Graph(Self("src/App/Program.cs")))
+            .Should()
+            .AdhereTo(static _ => true, "the rule's message");
+
+        Assert.Throws<UserError>(() => RuleAssert.Fails(rule));
+    }
+
+    [Fact]
+    public void Passes_rejects_a_null_rule()
     {
         Assert.Throws<ArgumentNullException>(() => RuleAssert.Passes(null!));
+    }
+
+    [Fact]
+    public void Fails_rejects_a_null_rule()
+    {
+        Assert.Throws<ArgumentNullException>(() => RuleAssert.Fails(null!));
     }
 
     private static Graph Graph(params Edge[] edges) => new(edges);

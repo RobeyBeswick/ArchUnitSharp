@@ -26,6 +26,7 @@ has a test project beside it in `tests/`.
 | `src/ArchUnitSharp.Extraction` | Reads the C# source tree: project location, source enumeration, import parsing, internal/external classification, per-line ignore directives, self-edges, parallel-edge merging, the graph cache. |
 | `src/ArchUnitSharp.Projection` | Pure graph work: projecting edges, nodes and cycles; the per-edge map functions; Tarjan and Johnson cycle detection. |
 | `src/ArchUnitSharp.Testing` | Violation formatting, result shaping, and the framework-agnostic assert helper. |
+| `src/ArchUnitSharp.Testing.Xunit` | The xUnit-native integration: `XunitAssert`, the `AssertPasses`/`AssertFails` rule extensions, and the import-time detection that makes the surface native under xUnit or silently falls back to the agnostic helper. Nothing else imports this project. |
 | `src/ArchUnitSharp.Files` | The files domain module. |
 | `src/ArchUnitSharp.Layers` | The layers domain module. |
 | `src/ArchUnitSharp.Slices` | The slices domain module. |

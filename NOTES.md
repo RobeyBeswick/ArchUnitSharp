@@ -1,5 +1,17 @@
 # NOTES
 
+WHY: Issue 26 — the native xUnit integration ships as a new project `ArchUnitSharp.Testing.Xunit`
+(`XunitAssert` + the `AssertPasses`/`AssertFails` extensions), not inside `ArchUnitSharp.Testing`,
+because the agnostic module must stay free of any framework dependency and issue 25's shadowing
+rationale bars a type named `Assert`; the adapter holds no rule logic — it calls `Check`, shapes via
+`ResultFactory`, and asserts through xUnit's own `Assert.True`/`Assert.False` (the negation idiom) —
+and a `[ModuleInitializer]` runs at import to silently detect a live xUnit run (the `xunit.runner.*` /
+`xunit.execution.*` assemblies load only when xUnit actually executes tests), falling back to the
+agnostic `RuleAssert` otherwise, which is what "NUnit and MSTest covered by the agnostic path" means.
+That fallback is why the agnostic helper gains a `Fails` twin of `Passes`: without it the adapter's
+negation would have to fabricate prose in the adapter, and the agnostic path could not cover "assert
+the rule fails" for NUnit/MSTest as cleanly as the native path does.
+
 WHY: Issue 25 — the framework-agnostic assert helper ships as `RuleAssert.Passes(rule, options?)`
 throwing `AssertionFailedException`, not as a type named `Assert`: a public `Assert` in the
 `ArchUnitSharp.Testing` namespace would shadow every test framework's own `Assert` type for the
