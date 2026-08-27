@@ -1,5 +1,20 @@
 # NOTES
 
+WHY: Issue 16 — the entry points (`project files`, `files`) live in a new root project
+`src/ArchUnitSharp` (the composition root), not in the Files module, because an entry must locate the
+project and drive the graph cache — the extraction wiring a pure domain module must not import. The
+Files module's public surface is therefore the `ArchUnitSharp.Files.Files` builder over a graph, and
+the root's return type is spelled `ArchUnitSharp.Files.Files` in full: from inside the `ArchUnitSharp`
+namespace the namespace `ArchUnitSharp.Files` shadows the type name `Files` (CS0118), and a using-alias
+named `Files` conflicts with the namespace member too (CS0576).
+
+WHY: Issue 16 — the four selectors map one-to-one onto the kernel's four `MatchTarget` values, which is
+what gives each a distinct meaning: `with name`→`Filename`, `in folder`→`PathWithoutFilename`,
+`in path`→`Path`, `in file`→`Classname` (the identifier with its extension stripped and separators
+turned into dots, e.g. `src/Models/Car.cs` → `src.Models.Car`). The issue does not define the
+selectors' match semantics; this reading reuses the kernel's matching vocabulary without inventing a
+second one.
+
 WHY: Issue 13 — projections filter relabelled self-loops (a projected edge whose source and target are
 the same label) out of both the edge set and the cycle set, with no keep-self-loops option. AGENTS.md
 says "projections filter self-edges out by default"; the option is omitted because no module needs it
