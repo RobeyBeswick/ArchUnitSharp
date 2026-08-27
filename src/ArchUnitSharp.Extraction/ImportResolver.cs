@@ -40,7 +40,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// <para>
 /// Edges are returned sorted by source, then target, then import kind, so the output is stable and
 /// reports built from it are reproducible. Parallel edges are not merged here and self-edges are not
-/// added here; the graph layer that consumes these edges is responsible for both.
+/// added here; <see cref="ImportEdgeNormaliser"/> turns this raw output into the canonical edge set.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The list it returns is a fresh copy on every
