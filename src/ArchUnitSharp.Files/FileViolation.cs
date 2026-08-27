@@ -10,7 +10,8 @@ using ArchUnitSharp.Common.Extraction;
 /// <remarks>
 /// <para>
 /// The violation carries the offending file and nothing else; the meaning is supplied by the rule
-/// that produced it. This is the first concrete subtype to carry <see cref="ViolationKind.Rule"/>.
+/// that produced it. It carries <see cref="ViolationKind.Rule"/>, the same kind the files module's
+/// other predicate violation, <see cref="CycleViolation"/>, carries.
 /// </para>
 /// <para>
 /// This type is immutable and value-semantic; two violations with the same file are equal.

@@ -120,7 +120,91 @@ public class FilesAssertionTests
         Assert.Throws<ArgumentNullException>(() => FilesAssertion.Exist(null!, negate: false, options: null));
     }
 
+    [Fact]
+    public void Cycles_passes_an_acyclic_selection()
+    {
+        var files = new Files(Graph(
+            Using("a.cs", "b.cs"),
+            Using("b.cs", "c.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(files, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Cycles_reports_each_cycle_of_the_selection_as_a_cycle_violation()
+    {
+        var files = new Files(Graph(
+            Using("a.cs", "b.cs"),
+            Using("b.cs", "a.cs")));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(files, options: null);
+
+        Assert.Equal(
+            new Violation[] { new CycleViolation(new[] { "a.cs", "b.cs", "a.cs" }) },
+            violations);
+    }
+
+    [Fact]
+    public void Cycles_after_selectors_checks_only_the_selected_files()
+    {
+        var files = new Files(Graph(
+            Using("src/Models/A.cs", "src/Models/B.cs"),
+            Using("src/Models/B.cs", "src/Models/A.cs"),
+            Using("src/App/X.cs", "src/App/Y.cs"),
+            Using("src/App/Y.cs", "src/App/X.cs"))).InFolder("src/App");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(files, options: null);
+
+        Assert.Equal(
+            new Violation[] { new CycleViolation(new[] { "src/App/X.cs", "src/App/Y.cs", "src/App/X.cs" }) },
+            violations);
+    }
+
+    [Fact]
+    public void Cycles_guards_an_empty_selection()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(new Files(Graph()), options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal("project files should have no cycles", Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void The_cycles_guard_names_the_selectors_that_left_the_selection_empty()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.cs"))).WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(files, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files with name 'Car.cs' should have no cycles",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void Cycles_honours_allow_empty_tests()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.Cycles(
+            new Files(Graph()),
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Cycles_rejects_a_null_files_selection()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesAssertion.Cycles(null!, options: null));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
+
+    private static Edge Using(string source, string target) =>
+        new(source, target, external: false, ImportKind.Using);
 }

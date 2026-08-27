@@ -1,5 +1,20 @@
 # NOTES
 
+WHY: Issue 18 — `CycleViolation` carries the readable `Path` ("src/A.cs → src/B.cs → src/A.cs")
+alongside its data (`Files`), prose on a violation that AGENTS.md says should carry data only, because
+there is no Testing project yet to host message construction — the same exception that puts
+`EmptyTestViolation.RuleDescription` in this module.
+
+WHY: Issue 18 — `should have no cycles` is exposed only in the positive mood (the issue says so), so
+the shared `FilesAssertion.Cycles` threads no mood flag; the "single boolean threaded into one shared
+assertion" rule exists to stop forked code paths when both moods exist, and with one mood there is
+nothing to fork.
+
+WHY: Issue 18 — cycle detection runs on the subgraph the selection induces (an edge is considered
+only when both its endpoints are selected), so a cycle is reported only when every file it passes
+through is in the selection; the issue does not define how selectors scope cycle detection, and this
+reading keeps a rule over a set of files scoped to exactly that set.
+
 WHY: Issue 17 — the files rule terminal implements `ICheckable` from the Files assembly, but the
 interface's unexported guard member is `internal` to Common, so Common now grants
 `InternalsVisibleTo` to `ArchUnitSharp.Files`; without it the guard ("outsiders cannot implement the

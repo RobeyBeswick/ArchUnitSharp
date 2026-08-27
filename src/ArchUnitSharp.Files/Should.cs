@@ -11,8 +11,8 @@ using ArchUnitSharp.Files.Assertion;
 /// <remarks>
 /// <para>
 /// This type is the mood, nothing else: it carries no rule logic. A predicate method forwards the
-/// selection and its <see langword="false"/> mood flag to the shared assertion in
-/// <see cref="FilesAssertion"/>, which is the single place a files rule's outcome is computed. The
+/// selection — with its mood flag where the predicate exists in both moods — to the shared assertion
+/// in <see cref="FilesAssertion"/>, which is the single place a files rule's outcome is computed. The
 /// negated twin is <see cref="ShouldNot"/>; there is no third mood.
 /// </para>
 /// <para>
@@ -38,4 +38,13 @@ public sealed class Should
     /// </summary>
     /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
     public ICheckable Exist() => new FilesExistRule(_files, negate: false);
+
+    /// <summary>
+    /// <c>should have no cycles</c>: the projected dependency graph of the selected files must be
+    /// acyclic. Each cycle the selection forms is reported as one <see cref="CycleViolation"/>, and
+    /// the empty-test guard reports a selection that matched nothing. This predicate exists only in
+    /// the positive mood.
+    /// </summary>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    public ICheckable HaveNoCycles() => new FilesCyclesRule(_files);
 }

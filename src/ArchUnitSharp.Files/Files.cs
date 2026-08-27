@@ -117,6 +117,15 @@ public sealed class Files
     /// <returns>The selected files' identifiers, sorted.</returns>
     public IReadOnlyList<string> Select() => Projection.FilesProjection.Select(_graph, _filters);
 
+    /// <summary>
+    /// The cycles of this selection's projected dependency graph: the closed file path of every
+    /// elementary cycle in the subgraph the selected files induce, first and last entry the same file.
+    /// A cycle is reported only when every file it passes through is selected. Internal: the cycles
+    /// rule's terminal consumes it through the assertion.
+    /// </summary>
+    internal IReadOnlyList<IReadOnlyList<string>> Cycles() =>
+        Projection.FilesProjection.Cycles(_graph, _filters);
+
     private Files Add(Filter filter)
     {
         var filters = new Filter[_filters.Length + 1];

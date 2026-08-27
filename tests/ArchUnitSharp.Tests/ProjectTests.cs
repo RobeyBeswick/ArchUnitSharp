@@ -151,4 +151,41 @@ public class ProjectTests
             new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should exist") },
             violations);
     }
+
+    [Fact]
+    public void ProjectFiles_should_have_no_cycles_passes_for_an_acyclic_project()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/A.cs", "namespace App { public class A { } }");
+        project.WriteFile("src/B.cs", "using App; namespace Models.Car { public class B { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .HaveNoCycles()
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_have_no_cycles_flags_each_cycle_as_a_readable_path()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/A.cs", "using Models.Car; namespace App { public class A { } }");
+        project.WriteFile("src/B.cs", "using App; namespace Models.Car { public class B { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .HaveNoCycles()
+            .Check();
+
+        var cycle = Assert.Single(violations);
+        Assert.Equal("src/A.cs → src/B.cs → src/A.cs", Assert.IsType<CycleViolation>(cycle).Path);
+    }
 }
