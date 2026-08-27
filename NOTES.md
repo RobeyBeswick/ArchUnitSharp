@@ -1,5 +1,12 @@
 # NOTES
 
+WHY: Issue 13 — projections filter relabelled self-loops (a projected edge whose source and target are
+the same label) out of both the edge set and the cycle set, with no keep-self-loops option. AGENTS.md
+says "projections filter self-edges out by default"; the option is omitted because no module needs it
+yet, and filtering means the cycle set reports only loops between distinct labels, which is what the
+layers/slices "free of cycles" checks will want (an intra-layer dependency collapses to a self-loop
+and must not be flagged). `ProjectedCycle` consequently requires at least two hops.
+
 WHY: Issue 12 — the per-line ignore directive renders ArchUnitPython's `# archunit: ignore` as the C#
 line-comment idiom `// archunit: ignore`, and "named modules" maps to the *referenced namespace/type*
 written on the `using` line (the graph has files, not modules), scoped by exact-or-prefix match as
