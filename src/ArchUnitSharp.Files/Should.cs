@@ -91,6 +91,17 @@ public sealed class Should
     public DependOn DependOn() => new(_files, negate: false);
 
     /// <summary>
+    /// <c>should depend on external modules</c>: every selected file must depend on at least one
+    /// external module whose name matches any selector applied to the returned object. An external
+    /// module is the target of an external edge: a name no file in the project declares, kept as
+    /// written — <c>System.Linq</c> for <c>using System.Linq;</c>. A selected file that depends on
+    /// none is reported as one <see cref="FileViolation"/>, and the empty-test guard reports a rule
+    /// whose selection or object matched nothing.
+    /// </summary>
+    /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    public DependOnExternalModules DependOnExternalModules() => new(_files, negate: false);
+
+    /// <summary>
     /// <c>should have no cycles</c>: the projected dependency graph of the selected files must be
     /// acyclic. Each cycle the selection forms is reported as one <see cref="CycleViolation"/>, and
     /// the empty-test guard reports a selection that matched nothing. This predicate exists only in

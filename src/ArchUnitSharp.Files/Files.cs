@@ -136,12 +136,13 @@ public sealed class Files
 
     /// <summary>
     /// The project's dependency graph this selection draws its files from. Internal: the depend-on
-    /// assertion reads it to compute the object's files and the dependencies between the two.
+    /// assertions read it to compute the object's files or external modules and the dependencies
+    /// between the two.
     /// </summary>
     internal Graph Graph => _graph;
 
     /// <summary>
-    /// The scope's selectors, in the order they were applied. Internal: the depend-on assertion reads
+    /// The scope's selectors, in the order they were applied. Internal: the depend-on assertions read
     /// them to compute the subject's dependency edges.
     /// </summary>
     internal IReadOnlyList<Filter> Filters => _filters;

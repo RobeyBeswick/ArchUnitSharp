@@ -823,12 +823,235 @@ public class FilesAssertionTests
         Assert.Throws<ArgumentNullException>(() => FilesAssertion.DependOn(null!, options: null));
     }
 
+    [Fact]
+    public void DependOnExternalModules_passes_when_every_subject_depends_on_a_matching_module()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Truck.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Truck.cs", "System.Collections.Generic")))
+            .InFolder("src/App")
+            .Should()
+            .DependOnExternalModules()
+            .Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_flags_a_subject_file_that_depends_on_no_matching_module()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Orphan.cs"),
+            External("src/App/Program.cs", "System.Linq")))
+            .InFolder("src/App")
+            .Should()
+            .DependOnExternalModules()
+            .Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Orphan.cs") }, violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_ignores_internal_targets()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Other.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            External("src/App/Other.cs", "Newtonsoft.Json")))
+            .InFolder("src/App")
+            .Should()
+            .DependOnExternalModules()
+            .Matching("**/*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Equal(new[] { new FileViolation("src/App/Program.cs") }, violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_reports_violations_in_subject_order()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Alpha.cs"),
+            Self("src/App/Mike.cs"),
+            Self("src/App/Zeta.cs"),
+            External("src/App/Alpha.cs", "NUnit"),
+            External("src/App/Mike.cs", "NUnit"),
+            External("src/App/Zeta.cs", "System.Linq")))
+            .InFolder("src/App")
+            .Should()
+            .DependOnExternalModules()
+            .Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Equal(
+            new[] { "src/App/Alpha.cs", "src/App/Mike.cs" },
+            violations.Select(static v => ((FileViolation)v).File));
+    }
+
+    [Fact]
+    public void DependOnExternalModules_flags_each_offending_dependency_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Collections.Generic"),
+            External("src/App/Program.cs", "Newtonsoft.Json")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOnExternalModules()
+            .Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new DependencyViolation("src/App/Program.cs", "System.Collections.Generic"),
+                new DependencyViolation("src/App/Program.cs", "System.Linq"),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_passes_when_no_subject_depends_on_a_matching_module_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/Other.cs"),
+            Self("src/Util/Helper.cs"),
+            External("src/App/Program.cs", "Newtonsoft.Json"),
+            External("src/Util/Helper.cs", "System.Linq")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOnExternalModules()
+            .Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_guards_an_empty_selection_with_the_positive_mood()
+    {
+        var rule = new Files(Graph()).Should().DependOnExternalModules().Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal(
+            "project files should depend on external modules matching 'System.*'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_guards_an_empty_selection_with_the_negated_mood()
+    {
+        var rule = new Files(Graph()).ShouldNot().DependOnExternalModules().Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not depend on external modules matching 'System.*'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_guards_an_object_that_matches_nothing_with_the_positive_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).Should().DependOnExternalModules().Matching("Newtonsoft.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should depend on external modules matching 'Newtonsoft.*'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_guards_an_object_that_matches_nothing_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).ShouldNot().DependOnExternalModules().Matching("Newtonsoft.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not depend on external modules matching 'Newtonsoft.*'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void The_external_modules_guard_names_the_selectors_of_both_selection_and_object()
+    {
+        var rule = new Files(Graph(Self("a.cs"), Self("b.cs")))
+            .WithName("Car.cs")
+            .ShouldNot()
+            .DependOnExternalModules()
+            .Matching("System.*")
+            .Matching("Newtonsoft.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(rule, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files with name 'Car.cs' should not depend on external modules matching 'System.*' matching 'Newtonsoft.*'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        var rule = new Files(Graph()).Should().DependOnExternalModules().Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(
+            rule,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        var rule = new Files(Graph(Self("a.cs"))).ShouldNot().DependOnExternalModules().Matching("System.*");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.DependOnExternalModules(
+            rule,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void DependOnExternalModules_rejects_a_null_rule()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesAssertion.DependOnExternalModules(null!, options: null));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
 
     private static Edge Using(string source, string target) =>
         new(source, target, external: false, ImportKind.Using);
+
+    private static Edge External(string source, string module) =>
+        new(source, module, external: true, ImportKind.Using);
 
     private static Filter NameFilter(string glob) => new(new Pattern(glob), MatchTarget.Filename);
 

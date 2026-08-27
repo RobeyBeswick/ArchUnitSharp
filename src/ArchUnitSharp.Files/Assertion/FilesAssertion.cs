@@ -24,7 +24,12 @@ using ArchUnitSharp.Files.Projection;
 /// file's dependencies against the object's selectors and yields one <see cref="FileViolation"/> per
 /// selected file that depends on none of them (positive mood) or one
 /// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports
-/// a rule whose selection or object matched nothing. A selection whose dependencies form a cycle
+/// a rule whose selection or object matched nothing. The external-modules predicate —
+/// <c>should (not) depend on external modules</c> — matches each selected file's external
+/// dependencies against the object's selectors the same way: one <see cref="FileViolation"/> per
+/// selected file that depends on no matching module (positive mood), or one
+/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports a
+/// rule whose selection or object matched nothing. A selection whose dependencies form a cycle
 /// yields one <see cref="CycleViolation"/> per cycle.
 /// </para>
 /// <para>
@@ -193,6 +198,60 @@ internal static class FilesAssertion
 
         IReadOnlyList<Edge> dependencies =
             FilesProjection.Dependencies(files.Graph, files.Filters, rule.ObjectFilters);
+
+        if (rule.Negate)
+        {
+            return dependencies
+                .Select(static edge => (Violation)new DependencyViolation(edge.Source, edge.Target))
+                .ToArray();
+        }
+
+        var satisfied = new HashSet<string>(
+            dependencies.Select(static edge => edge.Source),
+            StringComparer.Ordinal);
+        return subject
+            .Where(file => !satisfied.Contains(file))
+            .Select(static file => (Violation)new FileViolation(file))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Checks a <c>should depend on external modules</c> / <c>should not depend on external modules</c>
+    /// rule: each selected file's external dependencies are matched against the rule's object
+    /// selectors. With the positive mood a selected file that depends on no external module matching
+    /// any object selector is reported as one <see cref="FileViolation"/>; with the negated mood each
+    /// dependency on an external module matching any object selector is reported as one
+    /// <see cref="DependencyViolation"/>. The empty-test guard reports a rule whose selection or
+    /// object matched nothing.
+    /// </summary>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<Violation> DependOnExternalModules(
+        DependOnExternalModules rule,
+        CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        Files files = rule.Subject;
+        IReadOnlyList<string> subject = files.Select();
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(files.Graph, rule.ObjectFilters);
+
+        if (subject.Count == 0 || modules.Count == 0)
+        {
+            if (options?.AllowEmptyTests == true)
+            {
+                return new Violation[0];
+            }
+
+            string description =
+                $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
+            return new Violation[] { new EmptyTestViolation(description) };
+        }
+
+        IReadOnlyList<Edge> dependencies =
+            FilesProjection.ExternalDependencies(files.Graph, files.Filters, rule.ObjectFilters);
 
         if (rule.Negate)
         {

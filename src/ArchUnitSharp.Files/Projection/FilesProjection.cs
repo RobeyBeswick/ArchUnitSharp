@@ -5,9 +5,11 @@ using ArchUnitSharp.Projection;
 
 /// <summary>
 /// The files module's pure projection logic: which files of a <see cref="Graph"/> a scope's list of
-/// <see cref="Filter"/> instances selects, which cycles the selected files' dependencies form, and
-/// which of their edges are the dependencies of a depend-on rule. Filters combine with AND — a file
-/// is selected when every filter matches it — and the empty filter list selects every file.
+/// <see cref="Filter"/> instances selects, which cycles the selected files' dependencies form, which
+/// of their edges are the dependencies of a depend-on-files rule, and which external modules a
+/// depend-on-external-modules rule's object names. File filters combine with AND — a file is selected
+/// when every filter matches it — while external-module filters combine with OR, and the empty filter
+/// list selects everything.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -19,6 +21,13 @@ using ArchUnitSharp.Projection;
 /// Each filter matches one part of a file's identifier — its name, folder, whole path or class-style
 /// name — and a file without filters matches everything. Selection results are sorted ordinally so
 /// reports are stable and reproducible.
+/// </para>
+/// <para>
+/// An external module is the target of an external edge: a name no file in the project declares, kept
+/// as written. External-module filters match that name as a whole against a glob — a
+/// <see cref="MatchTarget.Path"/> filter — and combine with OR, so an object narrowed by
+/// <c>Matching("System.*")</c> and <c>Matching("Newtonsoft.*")</c> names the modules in either family.
+/// The empty filter list names every external module.
 /// </para>
 /// <para>
 /// Cycle detection runs on the subgraph the selected files induce — every raw edge whose source and
@@ -108,6 +117,62 @@ internal static class FilesProjection
                 && !edge.External
                 && subject.Contains(edge.Source)
                 && objects.Contains(edge.Target))
+            .OrderBy(static edge => edge.Source, StringComparer.Ordinal)
+            .ThenBy(static edge => edge.Target, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the names of the external modules of a <c>should (not) depend on external modules</c>
+    /// rule's object: every distinct target of an external edge whose name matches at least one
+    /// <paramref name="filters"/>, or every distinct external target when there are no filters. The
+    /// result is sorted ordinally, so reports are reproducible.
+    /// </summary>
+    /// <param name="graph">The project's dependency graph. Must not be <see langword="null"/>.</param>
+    /// <param name="filters">The object's selectors. Must not be <see langword="null"/>.</param>
+    /// <returns>The matching external module names, sorted.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="graph"/> or <paramref name="filters"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<string> ExternalModules(Graph graph, IReadOnlyList<Filter> filters)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(filters);
+
+        return graph.Edges
+            .Where(static edge => edge.External)
+            .Select(static edge => edge.Target)
+            .Distinct(StringComparer.Ordinal)
+            .Where(name => filters.Count == 0 || filters.Any(filter => filter.Matches(name)))
+            .OrderBy(static name => name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the dependency edges of a <c>should (not) depend on external modules</c> rule: every
+    /// external edge from a file the <paramref name="subjectFilters"/> select to an external module
+    /// whose name matches at least one <paramref name="objectFilters"/>, or every such edge when there
+    /// are no object filters. An internal edge's target is a file, not a module, so it is never
+    /// returned. The result is sorted by source then target, so reports are reproducible.
+    /// </summary>
+    /// <param name="graph">The project's dependency graph. Must not be <see langword="null"/>.</param>
+    /// <param name="subjectFilters">The rule's subject selectors. Must not be <see langword="null"/>.</param>
+    /// <param name="objectFilters">The rule's object selectors. Must not be <see langword="null"/>.</param>
+    /// <returns>The subject-to-external-module dependency edges, sorted by source then target.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="graph"/>, <paramref name="subjectFilters"/> or <paramref name="objectFilters"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<Edge> ExternalDependencies(
+        Graph graph,
+        IReadOnlyList<Filter> subjectFilters,
+        IReadOnlyList<Filter> objectFilters)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(subjectFilters);
+        ArgumentNullException.ThrowIfNull(objectFilters);
+
+        var subject = new HashSet<string>(Select(graph, subjectFilters), StringComparer.Ordinal);
+
+        return graph.Edges
+            .Where(edge => edge.External
+                && subject.Contains(edge.Source)
+                && (objectFilters.Count == 0 || objectFilters.Any(filter => filter.Matches(edge.Target))))
             .OrderBy(static edge => edge.Source, StringComparer.Ordinal)
             .ThenBy(static edge => edge.Target, StringComparer.Ordinal)
             .ToArray();

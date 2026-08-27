@@ -88,4 +88,15 @@ public sealed class ShouldNot
     /// </summary>
     /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
     public DependOn DependOn() => new(_files, negate: true);
+
+    /// <summary>
+    /// <c>should not depend on external modules</c>: no selected file may depend on an external module
+    /// whose name matches any selector applied to the returned object. An external module is the
+    /// target of an external edge: a name no file in the project declares, kept as written —
+    /// <c>System.Linq</c> for <c>using System.Linq;</c>. Each offending dependency is reported as one
+    /// <see cref="DependencyViolation"/>, and the empty-test guard reports a rule whose selection or
+    /// object matched nothing.
+    /// </summary>
+    /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    public DependOnExternalModules DependOnExternalModules() => new(_files, negate: true);
 }

@@ -1,5 +1,15 @@
 # NOTES
 
+WHY: Issue 21 — `should (not) depend on external modules` is a new object type
+`DependOnExternalModules` with a `Matching` selector: a glob matched against the external edge target,
+which the resolver keeps as the module name as written (e.g. `System.Linq`). Repeats combine with OR,
+not the AND of the files-object's selectors, because the issue says the repeat is for OR and "depend on
+at least one of" is the third-party-policy reading. Both moods exist through the shared assertion's
+negate flag, and the empty-test guard fires when the selection or the object matched nothing — the
+object being the set of external module names in the graph matching any selector, so a typo in a
+`Matching` glob is an empty test in both moods rather than a silent pass (negated) or a blanket failure
+(positive).
+
 WHY: Issue 20 — the depend-on object exposes the same four selectors as the scope (`with name`,
 `in folder`, `in path`, `in file`), not just the three the issue enumerates, because the object is a
 file selection and the scope's selector vocabulary is the module's fixed set; a selector available on

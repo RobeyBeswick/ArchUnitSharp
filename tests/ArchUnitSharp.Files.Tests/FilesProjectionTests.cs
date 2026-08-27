@@ -410,12 +410,255 @@ public class FilesProjectionTests
             FilesProjection.Dependencies(Graph(Using("a.cs", "b.cs")), Array.Empty<Filter>(), null!));
     }
 
+    [Fact]
+    public void ExternalModules_returns_every_external_module_when_there_are_no_filters()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "Newtonsoft.Json"),
+            External("src/App/Program.cs", "System.Linq"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(graph, Array.Empty<Filter>());
+
+        Assert.Equal(new[] { "Newtonsoft.Json", "System.Linq" }, modules);
+    }
+
+    [Fact]
+    public void ExternalModules_returns_only_distinct_names()
+    {
+        var graph = Graph(
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Other.cs", "System.Linq"),
+            External("src/App/Other.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(graph, Array.Empty<Filter>());
+
+        Assert.Equal(new[] { "Newtonsoft.Json", "System.Linq" }, modules);
+    }
+
+    [Fact]
+    public void ExternalModules_ignores_internal_targets()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(graph, Array.Empty<Filter>());
+
+        Assert.Empty(modules);
+    }
+
+    [Fact]
+    public void ExternalModules_matches_a_module_name_glob()
+    {
+        var graph = Graph(
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Collections.Generic"),
+            External("src/App/Program.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(graph, new[] { Module("System.*") });
+
+        Assert.Equal(new[] { "System.Collections.Generic", "System.Linq" }, modules);
+    }
+
+    [Fact]
+    public void ExternalModules_combines_filters_with_or()
+    {
+        var graph = Graph(
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "Newtonsoft.Json"),
+            External("src/App/Program.cs", "NUnit"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(
+            graph,
+            new[] { Module("System.*"), Module("Newtonsoft.*") });
+
+        Assert.Equal(new[] { "Newtonsoft.Json", "System.Linq" }, modules);
+    }
+
+    [Fact]
+    public void ExternalModules_result_is_sorted_ordinally()
+    {
+        var graph = Graph(
+            External("src/App/Program.cs", "Zeta"),
+            External("src/App/Program.cs", "Alpha"),
+            External("src/App/Program.cs", "Mike"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(graph, Array.Empty<Filter>());
+
+        Assert.Equal(new[] { "Alpha", "Mike", "Zeta" }, modules);
+    }
+
+    [Fact]
+    public void ExternalModules_rejects_a_null_graph()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesProjection.ExternalModules(null!, Array.Empty<Filter>()));
+    }
+
+    [Fact]
+    public void ExternalModules_rejects_null_filters()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesProjection.ExternalModules(Graph(), null!));
+    }
+
+    [Fact]
+    public void ExternalDependencies_returns_every_edge_from_a_subject_file_to_a_matching_module()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Collections.Generic"),
+            External("src/App/Program.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Module("System.*") });
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("src/App/Program.cs", "System.Collections.Generic", external: true, ImportKind.Using),
+                new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_ignores_edges_from_unselected_files()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Other/Other.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/Other/Other.cs", "System.Linq"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Module("System.*") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_ignores_internal_edges()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            Array.Empty<Filter>(),
+            new[] { Module("**/*") });
+
+        Assert.Empty(dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_combines_object_filters_with_or()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[] { Module("System.*"), Module("Newtonsoft.*") });
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("src/App/Program.cs", "Newtonsoft.Json", external: true, ImportKind.Using),
+                new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_with_no_object_filters_returns_every_external_edge()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            Array.Empty<Filter>(),
+            Array.Empty<Filter>());
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("src/App/Program.cs", "Newtonsoft.Json", external: true, ImportKind.Using),
+                new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_result_is_sorted_by_source_then_target()
+    {
+        var graph = Graph(
+            Self("Z/z.cs"),
+            Self("A/a.cs"),
+            External("Z/z.cs", "Beta"),
+            External("A/a.cs", "Mike"),
+            External("A/a.cs", "Alpha"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            Array.Empty<Filter>(),
+            Array.Empty<Filter>());
+
+        Assert.Equal(
+            new[]
+            {
+                new Edge("A/a.cs", "Alpha", external: true, ImportKind.Using),
+                new Edge("A/a.cs", "Mike", external: true, ImportKind.Using),
+                new Edge("Z/z.cs", "Beta", external: true, ImportKind.Using),
+            },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_rejects_a_null_graph()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.ExternalDependencies(null!, Array.Empty<Filter>(), Array.Empty<Filter>()));
+    }
+
+    [Fact]
+    public void ExternalDependencies_rejects_null_subject_filters()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.ExternalDependencies(Graph(), null!, Array.Empty<Filter>()));
+    }
+
+    [Fact]
+    public void ExternalDependencies_rejects_null_object_filters()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesProjection.ExternalDependencies(Graph(), Array.Empty<Filter>(), null!));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
 
     private static Edge Using(string source, string target) =>
         new(source, target, external: false, ImportKind.Using);
+
+    private static Edge External(string source, string module) =>
+        new(source, module, external: true, ImportKind.Using);
 
     private static Filter Filename(string glob) => new(new Pattern(glob), MatchTarget.Filename);
 
@@ -424,4 +667,6 @@ public class FilesProjectionTests
     private static Filter Path(string glob) => new(new Pattern(glob), MatchTarget.Path);
 
     private static Filter File(string glob) => new(new Pattern(glob), MatchTarget.Classname);
+
+    private static Filter Module(string glob) => new(new Pattern(glob), MatchTarget.Path);
 }

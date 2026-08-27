@@ -7,9 +7,10 @@ using ArchUnitSharp.Common.Extraction;
 /// satisfy the rule. A <c>should not exist</c> rule reports one of these per selected file, carrying
 /// a file that exists although the rule says it must not; the naming and location rules —
 /// <c>should (not) have name</c>, <c>should (not) be in folder</c>, <c>should (not) be in path</c> —
-/// report one per selected file whose name, folder or path contradicts the mood; and a
+/// report one per selected file whose name, folder or path contradicts the mood; a
 /// <c>should depend on files</c> rule reports one per selected file that depends on none of the
-/// object's files.
+/// object's files; and a <c>should depend on external modules</c> rule reports one per selected file
+/// that depends on none of the object's external modules.
 /// </summary>
 /// <remarks>
 /// <para>
