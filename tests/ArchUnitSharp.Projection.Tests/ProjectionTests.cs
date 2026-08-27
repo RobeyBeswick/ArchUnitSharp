@@ -261,6 +261,22 @@ public class ProjectionTests
     }
 
     [Fact]
+    public void Cycles_report_file_cycles_under_the_identity_map()
+    {
+        var graph = Graph(
+            Using("a.cs", "b.cs"),
+            Using("b.cs", "c.cs"),
+            Using("c.cs", "a.cs"));
+
+        IReadOnlyList<ProjectedCycle> cycles = Projection.Cycles(graph, Identity());
+
+        ProjectedCycle cycle = Assert.Single(cycles);
+        Assert.Equal(new[] { Using("a.cs", "b.cs") }, cycle.Edges[0].Edges);
+        Assert.Equal(new[] { Using("b.cs", "c.cs") }, cycle.Edges[1].Edges);
+        Assert.Equal(new[] { Using("c.cs", "a.cs") }, cycle.Edges[2].Edges);
+    }
+
+    [Fact]
     public void Cycles_report_nothing_for_an_acyclic_graph()
     {
         var graph = Graph(
@@ -270,6 +286,24 @@ public class ProjectionTests
         IReadOnlyList<ProjectedCycle> cycles = Projection.Cycles(graph, SliceMap());
 
         Assert.Empty(cycles);
+    }
+
+    [Fact]
+    public void Cycles_filter_self_edges_before_detection()
+    {
+        var graph = Graph(
+            Self("a.cs"),
+            Self("b.cs"),
+            Using("a.cs", "b.cs"),
+            Using("b.cs", "a.cs"));
+
+        IReadOnlyList<ProjectedCycle> cycles = Projection.Cycles(graph, Identity());
+
+        ProjectedCycle cycle = Assert.Single(cycles);
+        Assert.Equal(2, cycle.Edges.Count);
+        Assert.Equal("a.cs", cycle.Edges[0].Source);
+        Assert.Equal("b.cs", cycle.Edges[0].Target);
+        Assert.Equal("a.cs", cycle.Edges[1].Target);
     }
 
     [Fact]
