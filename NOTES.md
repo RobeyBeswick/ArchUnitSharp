@@ -1,5 +1,15 @@
 # NOTES
 
+WHY: Issue 25 — the framework-agnostic assert helper ships as `RuleAssert.Passes(rule, options?)`
+throwing `AssertionFailedException`, not as a type named `Assert`: a public `Assert` in the
+`ArchUnitSharp.Testing` namespace would shadow every test framework's own `Assert` type for the
+consumer (an enclosing-namespace member beats a using-directive import — verified empirically, so
+`using Xunit;` + `using ArchUnitSharp.Testing;` in one file would make the consumer's own
+`Assert.True(...)` resolve to the wrong type), breaking the issue's core "works with every test
+framework, needs no configuration" promise; the issue's verb `passes` and the optional `options?`
+argument are kept verbatim, and the helper is documented in its own doc comments as the documented
+fallback.
+
 WHY: Issue 24 — the Testing project lands as the single message-formatting layer (`ViolationFactory`,
 `ResultFactory`, `CheckResult`, `Colour`/`Colouriser`), and the pre-existing prose conveniences on
 violations (`CycleViolation.Path`, `EmptyTestViolation.RuleDescription`) are kept as the data the
