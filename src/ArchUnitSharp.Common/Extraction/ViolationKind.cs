@@ -15,8 +15,7 @@ public enum ViolationKind
 
     /// <summary>
     /// A rule predicate failed: the checked value did not satisfy the stated threshold or condition.
-    /// No concrete subtype carries this kind yet; it exists so the family has a distinct, non-zero
-    /// member, which is what makes the base kind propagation observable in tests.
+    /// The files module's <c>FileViolation</c> is the first concrete subtype to carry this kind.
     /// </summary>
     Rule,
 }

@@ -1,19 +1,22 @@
 namespace ArchUnitSharp.Files;
 
+using System.Text;
 using ArchUnitSharp.Common.Extraction;
 
 /// <summary>
 /// The files domain module's fluent surface: a scoped selection of the files of one project's
 /// <see cref="Graph"/>. It is the ENTRY and SCOPE of a rule chain — built from the entry points
-/// <c>Project.ProjectFiles()</c> / <c>Project.Files()</c> and narrowed by the selectors
-/// <see cref="WithName"/>, <see cref="InFolder"/>, <see cref="InPath"/> and <see cref="InFile"/>.
+/// <c>Project.ProjectFiles()</c> / <c>Project.Files()</c>, narrowed by the selectors
+/// <see cref="WithName"/>, <see cref="InFolder"/>, <see cref="InPath"/> and <see cref="InFile"/>,
+/// and handed to the mood <see cref="Should"/> or <see cref="ShouldNot"/>.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A <see cref="Files"/> value names a set of files: every file in the graph when no selector has
 /// been applied, otherwise exactly the files that match every selector applied so far — selectors
-/// combine with AND. The MOOD, PREDICATE and TERMINAL of a rule are the assertion layer's concern and
-/// come later; <see cref="Select"/> evaluates the scope's selection so a terminal can consume it.
+/// combine with AND. The MOOD of a rule is chosen with <see cref="Should"/> or
+/// <see cref="ShouldNot"/>; the PREDICATE and TERMINAL are the assertion layer's concern, and
+/// <see cref="Select"/> evaluates the scope's selection so a terminal can consume it.
 /// </para>
 /// <para>
 /// Every selector returns a new <see cref="Files"/> instance and never mutates the one it was called
@@ -93,6 +96,20 @@ public sealed class Files
     public Files InFile(string glob) => Add(new Filter(new Pattern(glob), MatchTarget.Classname));
 
     /// <summary>
+    /// <c>should</c>: begins a rule over this selection with the positive mood. Returns a new
+    /// <see cref="Should"/>; the current selection is unchanged.
+    /// </summary>
+    /// <returns>A new <see cref="Should"/> over this selection.</returns>
+    public Should Should() => new(this);
+
+    /// <summary>
+    /// <c>should not</c>: begins a rule over this selection with the negated mood. Returns a new
+    /// <see cref="ShouldNot"/>; the current selection is unchanged.
+    /// </summary>
+    /// <returns>A new <see cref="ShouldNot"/> over this selection.</returns>
+    public ShouldNot ShouldNot() => new(this);
+
+    /// <summary>
     /// Evaluates the scope: the identifiers of the files this selection names, sorted ordinally. With
     /// no selectors every file of the graph is selected; with one or more, exactly the files that
     /// match all of them. The returned list is a fresh copy on every call.
@@ -107,4 +124,37 @@ public sealed class Files
         filters[_filters.Length] = filter;
         return new Files(_graph, filters);
     }
+
+    /// <summary>
+    /// Describes this selection as the scope of a rule, for a report: the entry phrase
+    /// <c>project files</c> followed by one clause per selector, in the selector's own words. A
+    /// selection narrowed by <c>WithName("Car.cs")</c> is described as
+    /// <c>project files with name 'Car.cs'</c>.
+    /// </summary>
+    internal string DescribeScope()
+    {
+        var builder = new StringBuilder("project files");
+        foreach (Filter filter in _filters)
+        {
+            builder.Append(' ');
+            builder.Append(SelectorWord(filter.Target));
+            builder.Append(" '");
+            builder.Append(filter.Pattern.Glob);
+            builder.Append('\'');
+        }
+
+        return builder.ToString();
+    }
+
+    private static string SelectorWord(MatchTarget target) => target switch
+    {
+        MatchTarget.Filename => "with name",
+        MatchTarget.PathWithoutFilename => "in folder",
+        MatchTarget.Path => "in path",
+        MatchTarget.Classname => "in file",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(target),
+            target,
+            "Target is not a defined MatchTarget value."),
+    };
 }

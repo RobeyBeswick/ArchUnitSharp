@@ -1,5 +1,6 @@
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Extraction;
+using ArchUnitSharp.Files;
 
 namespace ArchUnitSharp.Tests;
 
@@ -95,5 +96,59 @@ public class ProjectTests
         var missing = new ProjectLocation("/nonexistent/root", "/nonexistent/root/App.sln", null);
 
         Assert.Throws<TechnicalError>(() => Project.ProjectFiles(missing));
+    }
+
+    [Fact]
+    public void ProjectFiles_should_exist_passes_for_a_real_project()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location).Should().Exist().Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Files_should_not_exist_flags_the_matching_files()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.Files(location)
+            .InFolder("src/Models")
+            .ShouldNot()
+            .Exist()
+            .Check();
+
+        Assert.Equal(new[] { new FileViolation("src/Models/Car.cs") }, violations);
+    }
+
+    [Fact]
+    public void Files_should_exist_guards_a_selection_that_matches_nothing()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .WithName("Car.cs")
+            .Should()
+            .Exist()
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should exist") },
+            violations);
     }
 }

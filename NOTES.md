@@ -1,5 +1,12 @@
 # NOTES
 
+WHY: Issue 17 — the files rule terminal implements `ICheckable` from the Files assembly, but the
+interface's unexported guard member is `internal` to Common, so Common now grants
+`InternalsVisibleTo` to `ArchUnitSharp.Files`; without it the guard ("outsiders cannot implement the
+seam") would also bar the library's own modules. And the `EmptyTestViolation`'s `RuleDescription` is
+built in the Files module — the assertion renders the scope from the selectors and appends the mood —
+because there is no Testing project yet to host message construction.
+
 WHY: Issue 16 — the entry points (`project files`, `files`) live in a new root project
 `src/ArchUnitSharp` (the composition root), not in the Files module, because an entry must locate the
 project and drive the graph cache — the extraction wiring a pure domain module must not import. The
