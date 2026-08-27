@@ -1,5 +1,12 @@
 # NOTES
 
+WHY: Issue 24 — the Testing project lands as the single message-formatting layer (`ViolationFactory`,
+`ResultFactory`, `CheckResult`, `Colour`/`Colouriser`), and the pre-existing prose conveniences on
+violations (`CycleViolation.Path`, `EmptyTestViolation.RuleDescription`) are kept as the data the
+factory renders from rather than removed, because each is public API with tests and the rule
+description is the empty-test violation's only datum; the "all message formatting lives in Testing"
+rule is satisfied by the factories being the only producers of report messages.
+
 WHY: Issue 23 — the empty-test guard lands as a shared kernel primitive (`EmptyTestGuard` in
 `Common.Extraction`) that every terminal routes its empty selection through, because the only
 terminals in the library today are the files ones and each already guarded inline; the issue's "on
