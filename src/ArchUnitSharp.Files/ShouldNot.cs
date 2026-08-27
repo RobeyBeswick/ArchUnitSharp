@@ -99,4 +99,20 @@ public sealed class ShouldNot
     /// </summary>
     /// <returns>The rule's object and terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
     public DependOnExternalModules DependOnExternalModules() => new(_files, negate: true);
+
+    /// <summary>
+    /// <c>should not adhere to</c>: no selected file may satisfy <paramref name="predicate"/>. The
+    /// predicate receives one <see cref="FileDetail"/> per selected file — its project-relative path,
+    /// name without extension, extension, directory, full source text and non-blank line count — and
+    /// must return <see langword="true"/> for the file to fail the rule. A selected file the predicate
+    /// accepts is reported as one <see cref="AdhereToViolation"/> carrying <paramref name="message"/>,
+    /// and the empty-test guard reports a selection that matched nothing.
+    /// </summary>
+    /// <param name="predicate">The custom predicate; must not be <see langword="null"/>.</param>
+    /// <param name="message">The rule's description, reported with each violation; must not be <see langword="null"/> or empty.</param>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> or <paramref name="message"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="message"/> is empty.</exception>
+    public ICheckable AdhereTo(Func<FileDetail, bool> predicate, string message) =>
+        new FilesAdhereToRule(_files, predicate, message, negate: true);
 }

@@ -23,14 +23,25 @@ using ArchUnitSharp.Common.Extraction;
 /// on, so a half-built selection can be stored in a variable and branched from without one branch
 /// seeing another's selectors. This type is immutable and safe for concurrent use.
 /// </para>
+/// <para>
+/// A selection also carries a source-text provider, the boundary through which the <c>adhere to</c>
+/// predicate reads each file's content. The provider is wired by the composition root — the entry
+/// points build it from the located project — and a selection built from a bare <see cref="Graph"/>
+/// has no source to read, so <c>adhere to</c> over it raises a <see cref="UserError"/> rather than
+/// fabricating empty text.
+/// </para>
 /// </remarks>
 public sealed class Files
 {
     private readonly Graph _graph;
     private readonly Filter[] _filters;
+    private readonly Func<string, string> _sourceText;
 
     /// <summary>
-    /// Creates a selection over every file of <paramref name="graph"/>.
+    /// Creates a selection over every file of <paramref name="graph"/>. The selection has no access
+    /// to the files' source text, so an <c>adhere to</c> rule over it raises a
+    /// <see cref="UserError"/>; build the selection from
+    /// <c>Project.ProjectFiles</c> to run such a rule.
     /// </summary>
     /// <param name="graph">The project's dependency graph. Must not be <see langword="null"/>.</param>
     /// <exception cref="ArgumentNullException"><paramref name="graph"/> is <see langword="null"/>.</exception>
@@ -39,12 +50,32 @@ public sealed class Files
         ArgumentNullException.ThrowIfNull(graph);
         _graph = graph;
         _filters = Array.Empty<Filter>();
+        _sourceText = NoSource;
     }
 
-    private Files(Graph graph, Filter[] filters)
+    /// <summary>
+    /// Creates a selection over every file of <paramref name="graph"/> whose source text is read
+    /// through <paramref name="sourceText"/>: an identifier in, the file's full text out. Internal:
+    /// the composition root wires a provider that reads the located project's files from disk, and a
+    /// test wires a fixture map.
+    /// </summary>
+    /// <param name="graph">The project's dependency graph. Must not be <see langword="null"/>.</param>
+    /// <param name="sourceText">The source-text provider. Must not be <see langword="null"/>.</param>
+    /// <exception cref="ArgumentNullException"><paramref name="graph"/> or <paramref name="sourceText"/> is <see langword="null"/>.</exception>
+    internal Files(Graph graph, Func<string, string> sourceText)
+    {
+        ArgumentNullException.ThrowIfNull(graph);
+        ArgumentNullException.ThrowIfNull(sourceText);
+        _graph = graph;
+        _filters = Array.Empty<Filter>();
+        _sourceText = sourceText;
+    }
+
+    private Files(Graph graph, Filter[] filters, Func<string, string> sourceText)
     {
         _graph = graph;
         _filters = filters;
+        _sourceText = sourceText;
     }
 
     /// <summary>
@@ -131,8 +162,27 @@ public sealed class Files
         var filters = new Filter[_filters.Length + 1];
         Array.Copy(_filters, filters, _filters.Length);
         filters[_filters.Length] = filter;
-        return new Files(_graph, filters);
+        return new Files(_graph, filters, _sourceText);
     }
+
+    /// <summary>
+    /// The per-file detail an <c>adhere to</c> rule's assertion materialises for one selected file:
+    /// the file's identity and source text, read through this selection's source provider. Internal:
+    /// the adhere-to assertion consumes it. A selection without a source provider — one built from a
+    /// bare graph — raises a <see cref="UserError"/> when this is called.
+    /// </summary>
+    internal FileDetail FileDetailOf(string identifier) =>
+        Projection.FilesProjection.Detail(identifier, _sourceText(identifier));
+
+    /// <summary>
+    /// The source provider of a selection built from a bare graph: there is no source text to read,
+    /// so any attempt to materialise a file's detail raises a <see cref="UserError"/>.
+    /// </summary>
+    private static string NoSource(string identifier) =>
+        throw new UserError(
+            $"Source text is not available for file '{identifier}': this selection was built from a "
+            + "graph without its source files. Build the selection from Project.ProjectFiles(...) to "
+            + "run adhere-to rules.");
 
     /// <summary>
     /// The project's dependency graph this selection draws its files from. Internal: the depend-on

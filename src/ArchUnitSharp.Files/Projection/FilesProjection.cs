@@ -6,10 +6,11 @@ using ArchUnitSharp.Projection;
 /// <summary>
 /// The files module's pure projection logic: which files of a <see cref="Graph"/> a scope's list of
 /// <see cref="Filter"/> instances selects, which cycles the selected files' dependencies form, which
-/// of their edges are the dependencies of a depend-on-files rule, and which external modules a
-/// depend-on-external-modules rule's object names. File filters combine with AND — a file is selected
-/// when every filter matches it — while external-module filters combine with OR, and the empty filter
-/// list selects everything.
+/// of their edges are the dependencies of a depend-on-files rule, which external modules a
+/// depend-on-external-modules rule's object names, and the per-file detail an <c>adhere to</c> rule
+/// hands its custom predicate. File filters combine with AND — a file is selected when every filter
+/// matches it — while external-module filters combine with OR, and the empty filter list selects
+/// everything.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -60,6 +61,38 @@ internal static class FilesProjection
             .Where(identifier => filters.All(filter => filter.Matches(identifier)))
             .OrderBy(static identifier => identifier, StringComparer.Ordinal)
             .ToArray();
+    }
+
+    /// <summary>
+    /// Returns the per-file detail an <c>adhere to</c> rule hands its custom predicate for one file:
+    /// the identifier, the name without its extension, the extension, the directory and the full
+    /// source text, with the non-blank line count of that text. The name, extension and directory are
+    /// derived from the identifier the same way the kernel derives its match targets — a file at
+    /// <c>src/Models/Car.cs</c> has the name <c>Car</c>, the extension <c>.cs</c> and the directory
+    /// <c>src/Models</c>; a root-level file has an empty directory and a file with no extension has an
+    /// empty extension. A line of the source whose content is only whitespace is blank.
+    /// </summary>
+    /// <param name="identifier">The file's graph identifier. Must not be <see langword="null"/>.</param>
+    /// <param name="sourceText">The file's full source text. Must not be <see langword="null"/>.</param>
+    /// <returns>The file's detail.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="identifier"/> or <paramref name="sourceText"/> is <see langword="null"/>.</exception>
+    public static FileDetail Detail(string identifier, string sourceText)
+    {
+        ArgumentNullException.ThrowIfNull(identifier);
+        ArgumentNullException.ThrowIfNull(sourceText);
+
+        string name = FilenameOf(identifier);
+        int dot = name.LastIndexOf('.');
+        string nameWithoutExtension = dot < 0 ? name : name.Substring(0, dot);
+        string extension = dot < 0 ? string.Empty : name.Substring(dot);
+
+        return new FileDetail(
+            identifier,
+            nameWithoutExtension,
+            extension,
+            PathWithoutFilenameOf(identifier),
+            sourceText,
+            NonBlankLineCountOf(sourceText));
     }
 
     /// <summary>
@@ -189,5 +222,31 @@ internal static class FilesProjection
         }
 
         return path;
+    }
+
+    private static string FilenameOf(string path)
+    {
+        int separator = path.LastIndexOf('/');
+        return separator < 0 ? path : path.Substring(separator + 1);
+    }
+
+    private static string PathWithoutFilenameOf(string path)
+    {
+        int separator = path.LastIndexOf('/');
+        return separator < 0 ? string.Empty : path.Substring(0, separator);
+    }
+
+    private static int NonBlankLineCountOf(string sourceText)
+    {
+        int count = 0;
+        foreach (string line in sourceText.Split('\n'))
+        {
+            if (!string.IsNullOrWhiteSpace(line))
+            {
+                count++;
+            }
+        }
+
+        return count;
     }
 }

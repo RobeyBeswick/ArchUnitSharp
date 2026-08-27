@@ -650,6 +650,76 @@ public class FilesProjectionTests
             FilesProjection.ExternalDependencies(Graph(), Array.Empty<Filter>(), null!));
     }
 
+    [Fact]
+    public void Detail_derives_the_name_extension_and_directory_from_the_identifier()
+    {
+        FileDetail detail = FilesProjection.Detail("src/Models/Car.cs", "source text");
+
+        Assert.Equal("src/Models/Car.cs", detail.Path);
+        Assert.Equal("Car", detail.NameWithoutExtension);
+        Assert.Equal(".cs", detail.Extension);
+        Assert.Equal("src/Models", detail.Directory);
+        Assert.Equal("source text", detail.SourceText);
+    }
+
+    [Fact]
+    public void Detail_keeps_a_root_level_files_directory_empty()
+    {
+        FileDetail detail = FilesProjection.Detail("Car.cs", "source text");
+
+        Assert.Equal("Car", detail.NameWithoutExtension);
+        Assert.Equal(".cs", detail.Extension);
+        Assert.Equal(string.Empty, detail.Directory);
+    }
+
+    [Fact]
+    public void Detail_keeps_a_dotless_files_extension_empty()
+    {
+        FileDetail detail = FilesProjection.Detail("Makefile", "source text");
+
+        Assert.Equal("Makefile", detail.NameWithoutExtension);
+        Assert.Equal(string.Empty, detail.Extension);
+        Assert.Equal(string.Empty, detail.Directory);
+    }
+
+    [Fact]
+    public void Detail_counts_every_line_that_is_not_blank_or_whitespace_only()
+    {
+        FileDetail detail = FilesProjection.Detail(
+            "src/Models/Car.cs",
+            "namespace App.Models;\n\npublic class Car { }\n   \n\t\npublic class Truck { }\n");
+
+        Assert.Equal(3, detail.NonBlankLineCount);
+    }
+
+    [Fact]
+    public void Detail_counts_windows_line_endings_once()
+    {
+        FileDetail detail = FilesProjection.Detail("src/Models/Car.cs", "a\r\n\r\nb\r\n");
+
+        Assert.Equal(2, detail.NonBlankLineCount);
+    }
+
+    [Fact]
+    public void Detail_reports_zero_non_blank_lines_for_an_empty_source()
+    {
+        FileDetail detail = FilesProjection.Detail("src/Models/Car.cs", string.Empty);
+
+        Assert.Equal(0, detail.NonBlankLineCount);
+    }
+
+    [Fact]
+    public void Detail_rejects_a_null_identifier()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesProjection.Detail(null!, "text"));
+    }
+
+    [Fact]
+    public void Detail_rejects_null_source_text()
+    {
+        Assert.Throws<ArgumentNullException>(() => FilesProjection.Detail("a.cs", null!));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

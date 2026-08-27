@@ -29,7 +29,10 @@ using ArchUnitSharp.Files.Projection;
 /// dependencies against the object's selectors the same way: one <see cref="FileViolation"/> per
 /// selected file that depends on no matching module (positive mood), or one
 /// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports a
-/// rule whose selection or object matched nothing. A selection whose dependencies form a cycle
+/// rule whose selection or object matched nothing. The adhere-to predicate — <c>should (not) adhere
+/// to</c> — hands each selected file's <see cref="FileDetail"/> to the rule's custom predicate and
+/// yields one <see cref="AdhereToViolation"/> per file whose verdict contradicts the mood, and the
+/// guard reports a selection that matched nothing. A selection whose dependencies form a cycle
 /// yields one <see cref="CycleViolation"/> per cycle.
 /// </para>
 /// <para>
@@ -163,6 +166,54 @@ internal static class FilesAssertion
     /// <exception cref="ArgumentNullException"><paramref name="files"/> or <paramref name="filter"/> is <see langword="null"/>.</exception>
     public static IReadOnlyList<Violation> BeInPath(Files files, Filter filter, bool negate, CheckOptions? options) =>
         Match(files, filter, "be in path", negate, options);
+
+    /// <summary>
+    /// Checks a <c>should adhere to</c> / <c>should not adhere to</c> rule over <paramref name="files"/>:
+    /// each selected file's detail — its path, name without extension, extension, directory, full
+    /// source text and non-blank line count — is handed to the rule's custom predicate. With the
+    /// positive mood a selected file the predicate rejects is reported as one
+    /// <see cref="AdhereToViolation"/> carrying the rule's message; with the negated mood a selected
+    /// file the predicate accepts is. The empty-test guard reports a selection that matched nothing.
+    /// </summary>
+    /// <param name="files">The selection the rule asserts over. Must not be <see langword="null"/>.</param>
+    /// <param name="predicate">The rule's custom predicate. Must not be <see langword="null"/>.</param>
+    /// <param name="message">The rule's message, carried by every violation. Must not be <see langword="null"/>.</param>
+    /// <param name="negate">
+    /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
+    /// </param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="files"/>, <paramref name="predicate"/> or <paramref name="message"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError"><paramref name="files"/> was built without a source provider, so a selected file's source text is unavailable.</exception>
+    public static IReadOnlyList<Violation> AdhereTo(
+        Files files,
+        Func<FileDetail, bool> predicate,
+        string message,
+        bool negate,
+        CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(files);
+        ArgumentNullException.ThrowIfNull(predicate);
+        ArgumentNullException.ThrowIfNull(message);
+
+        IReadOnlyList<string> selected = files.Select();
+
+        if (selected.Count == 0)
+        {
+            if (options?.AllowEmptyTests == true)
+            {
+                return new Violation[0];
+            }
+
+            string rule = $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} adhere to '{message}'";
+            return new Violation[] { new EmptyTestViolation(rule) };
+        }
+
+        return selected
+            .Where(identifier => predicate(files.FileDetailOf(identifier)) == negate)
+            .Select(identifier => (Violation)new AdhereToViolation(identifier, message))
+            .ToArray();
+    }
 
     /// <summary>
     /// Checks a <c>should depend on files</c> / <c>should not depend on files</c> rule: each selected

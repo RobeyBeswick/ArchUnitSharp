@@ -11,6 +11,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="ArchUnitSharp.Files.Tests" />
+    <InternalsVisibleTo Include="ArchUnitSharp" />
   </ItemGroup>
 
   <ItemGroup>

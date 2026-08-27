@@ -102,6 +102,22 @@ public sealed class Should
     public DependOnExternalModules DependOnExternalModules() => new(_files, negate: false);
 
     /// <summary>
+    /// <c>should adhere to</c>: every selected file must satisfy <paramref name="predicate"/>. The
+    /// predicate receives one <see cref="FileDetail"/> per selected file — its project-relative path,
+    /// name without extension, extension, directory, full source text and non-blank line count — and
+    /// must return <see langword="true"/> for the file to pass. A selected file the predicate rejects
+    /// is reported as one <see cref="AdhereToViolation"/> carrying <paramref name="message"/>, and
+    /// the empty-test guard reports a selection that matched nothing.
+    /// </summary>
+    /// <param name="predicate">The custom predicate; must not be <see langword="null"/>.</param>
+    /// <param name="message">The rule's description, reported with each violation; must not be <see langword="null"/> or empty.</param>
+    /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="predicate"/> or <paramref name="message"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="message"/> is empty.</exception>
+    public ICheckable AdhereTo(Func<FileDetail, bool> predicate, string message) =>
+        new FilesAdhereToRule(_files, predicate, message, negate: false);
+
+    /// <summary>
     /// <c>should have no cycles</c>: the projected dependency graph of the selected files must be
     /// acyclic. Each cycle the selection forms is reported as one <see cref="CycleViolation"/>, and
     /// the empty-test guard reports a selection that matched nothing. This predicate exists only in

@@ -16,7 +16,7 @@ using ArchUnitSharp.Common.Extraction;
 /// <para>
 /// The violation carries the offending file and nothing else; the meaning is supplied by the rule
 /// that produced it. It carries <see cref="ViolationKind.Rule"/>, the same kind the files module's
-/// other predicate violation, <see cref="CycleViolation"/>, carries.
+/// other predicate violations carry.
 /// </para>
 /// <para>
 /// This type is immutable and value-semantic; two violations with the same file are equal.

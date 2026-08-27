@@ -20,6 +20,11 @@ using ArchUnitSharp.Extraction;
 /// graph cache, so a suite that checks many rules over one project reads and parses its source files
 /// once.
 /// </para>
+/// <para>
+/// Each selection is wired with a source-text provider that reads a file's content from the located
+/// project's root on demand, which is what an <c>adhere to</c> rule hands its custom predicate. The
+/// read happens lazily, per selected file and per check, and only when such a rule runs.
+/// </para>
 /// </remarks>
 public static class Project
 {
@@ -37,7 +42,8 @@ public static class Project
     /// <returns>A selection of every file of the located project.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
-    public static ArchUnitSharp.Files.Files ProjectFiles(ProjectLocation location) => new(GraphCache.Get(location));
+    public static ArchUnitSharp.Files.Files ProjectFiles(ProjectLocation location) =>
+        new ArchUnitSharp.Files.Files(GraphCache.Get(location), identifier => ReadSource(location, identifier));
 
     /// <summary>
     /// <c>files</c>, the alias of <c>project files</c>: the files of the project located from the
@@ -55,4 +61,26 @@ public static class Project
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
     public static ArchUnitSharp.Files.Files Files(ProjectLocation location) => ProjectFiles(location);
+
+    /// <summary>
+    /// The source-text provider's disk half: reads one file's full text, given its project-relative
+    /// identifier, by joining it onto the located project's root. A file that cannot be read is an
+    /// environment failure and surfaces as a <see cref="TechnicalError"/>, the same treatment
+    /// extraction gives an unreadable source file.
+    /// </summary>
+    /// <param name="location">The project whose root resolves the identifier. Must not be <see langword="null"/>.</param>
+    /// <param name="identifier">The file's project-relative identifier. Must not be <see langword="null"/>.</param>
+    /// <returns>The file's full source text.</returns>
+    /// <exception cref="TechnicalError">The file cannot be read from disk.</exception>
+    private static string ReadSource(ProjectLocation location, string identifier)
+    {
+        try
+        {
+            return File.ReadAllText(Path.Combine(location.Root, identifier));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new TechnicalError($"Failed to read source file '{identifier}'.", exception);
+        }
+    }
 }

@@ -1043,6 +1043,226 @@ public class FilesAssertionTests
         Assert.Throws<ArgumentNullException>(() => FilesAssertion.DependOnExternalModules(null!, options: null));
     }
 
+    [Fact]
+    public void AdhereTo_passes_every_file_the_predicate_accepts()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.cs")), Reader("namespace App; public class X { }"));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files, static _ => true, "message", negate: false, options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void AdhereTo_flags_every_file_the_predicate_rejects()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.txt")), Reader("text"));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files,
+            static detail => detail.Extension == ".cs",
+            "every file is a C# file",
+            negate: false,
+            options: null);
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new AdhereToViolation("b.txt", "every file is a C# file"),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void AdhereTo_flags_every_file_the_predicate_accepts_with_the_negated_mood()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.txt")), Reader("text"));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files,
+            static detail => detail.Extension == ".cs",
+            "no file is a C# file",
+            negate: true,
+            options: null);
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new AdhereToViolation("a.cs", "no file is a C# file"),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void AdhereTo_passes_when_the_predicate_rejects_every_file_with_the_negated_mood()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.cs")), Reader("text"));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files,
+            static detail => detail.Extension == ".txt",
+            "no file is a text file",
+            negate: true,
+            options: null);
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void AdhereTo_passes_the_file_detail_to_the_predicate()
+    {
+        var sources = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["src/Models/Car.cs"] = "namespace App.Models;\n\npublic class Car { }\n",
+        };
+        var files = new Files(Graph(Self("src/Models/Car.cs")), identifier => sources[identifier]);
+
+        FileDetail? seen = null;
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files,
+            detail =>
+            {
+                seen = detail;
+                return true;
+            },
+            "message",
+            negate: false,
+            options: null);
+
+        Assert.Empty(violations);
+        var detail = Assert.IsType<FileDetail>(seen);
+        Assert.Equal("src/Models/Car.cs", detail.Path);
+        Assert.Equal("Car", detail.NameWithoutExtension);
+        Assert.Equal(".cs", detail.Extension);
+        Assert.Equal("src/Models", detail.Directory);
+        Assert.Equal("namespace App.Models;\n\npublic class Car { }\n", detail.SourceText);
+        Assert.Equal(2, detail.NonBlankLineCount);
+    }
+
+    [Fact]
+    public void AdhereTo_reports_violations_in_selection_order()
+    {
+        var files = new Files(Graph(Self("Z/z.cs"), Self("A/a.cs")), Reader("text"));
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files, static _ => false, "message", negate: false, options: null);
+
+        Assert.Equal(
+            new[] { "A/a.cs", "Z/z.cs" },
+            violations.Select(static v => ((AdhereToViolation)v).File));
+    }
+
+    [Fact]
+    public void The_mood_flag_is_the_only_difference_between_the_two_adhere_to_moods()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.txt")), Reader("text"));
+
+        IReadOnlyList<Violation> positive = FilesAssertion.AdhereTo(
+            files,
+            static detail => detail.Extension == ".cs",
+            "message",
+            negate: false,
+            options: null);
+        IReadOnlyList<Violation> negated = FilesAssertion.AdhereTo(
+            files,
+            static detail => detail.Extension == ".cs",
+            "message",
+            negate: true,
+            options: null);
+
+        Assert.Equal(new[] { new AdhereToViolation("b.txt", "message") }, positive);
+        Assert.Equal(new[] { new AdhereToViolation("a.cs", "message") }, negated);
+    }
+
+    [Fact]
+    public void AdhereTo_guards_an_empty_selection_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            new Files(Graph()), static _ => true, "message", negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.IsType<EmptyTestViolation>(empty);
+        Assert.Equal(
+            "project files should adhere to 'message'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void AdhereTo_guards_an_empty_selection_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            new Files(Graph()), static _ => true, "message", negate: true, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files should not adhere to 'message'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void The_adhere_to_guard_names_the_selectors_that_left_the_selection_empty()
+    {
+        var files = new Files(Graph(Self("a.cs"), Self("b.cs"))).WithName("Car.cs");
+
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            files, static _ => true, "message", negate: false, options: null);
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files with name 'Car.cs' should adhere to 'message'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
+    public void AdhereTo_honours_allow_empty_tests_with_the_positive_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            new Files(Graph()),
+            static _ => true,
+            "message",
+            negate: false,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void AdhereTo_honours_allow_empty_tests_with_the_negated_mood()
+    {
+        IReadOnlyList<Violation> violations = FilesAssertion.AdhereTo(
+            new Files(Graph()),
+            static _ => true,
+            "message",
+            negate: true,
+            options: new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_a_null_files_selection()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.AdhereTo(null!, static _ => true, "message", negate: false, options: null));
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_a_null_predicate()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.AdhereTo(new Files(Graph(Self("a.cs"))), null!, "message", negate: false, options: null));
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_a_null_message()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            FilesAssertion.AdhereTo(new Files(Graph(Self("a.cs"))), static _ => true, null!, negate: false, options: null));
+    }
+
+    private static Func<string, string> Reader(string content) => _ => content;
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

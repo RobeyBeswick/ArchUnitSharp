@@ -241,6 +241,94 @@ public class ShouldNotTests
         Assert.NotSame(first, second);
     }
 
+    [Fact]
+    public void AdhereTo_flags_every_file_the_predicate_accepts()
+    {
+        var rule = new Files(Graph(Self("Car.cs"), Self("Truck.cs")), Reader("text"))
+            .ShouldNot()
+            .AdhereTo(static detail => detail.NameWithoutExtension == "Car", "is not named Car");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new AdhereToViolation("Car.cs", "is not named Car") },
+            violations);
+    }
+
+    [Fact]
+    public void AdhereTo_passes_when_the_predicate_rejects_every_file()
+    {
+        var rule = new Files(Graph(Self("Car.cs"), Self("Truck.cs")), Reader("text"))
+            .ShouldNot()
+            .AdhereTo(static detail => detail.NameWithoutExtension == "Van", "is not named Van");
+
+        Assert.Empty(rule.Check());
+    }
+
+    [Fact]
+    public void AdhereTo_guards_a_selection_that_matches_nothing()
+    {
+        var rule = new Files(Graph(Self("a.cs")), Reader("text"))
+            .WithName("Car.cs")
+            .ShouldNot()
+            .AdhereTo(static _ => true, "message");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should not adhere to 'message'") },
+            violations);
+    }
+
+    [Fact]
+    public void AdhereTo_honours_allow_empty_tests()
+    {
+        var rule = new Files(Graph(Self("a.cs")), Reader("text"))
+            .WithName("Car.cs")
+            .ShouldNot()
+            .AdhereTo(static _ => true, "message");
+
+        IReadOnlyList<Violation> violations = rule.Check(new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_a_null_predicate()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Files(Graph(Self("a.cs")), Reader("text")).ShouldNot().AdhereTo(null!, "message"));
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_a_null_message()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Files(Graph(Self("a.cs")), Reader("text")).ShouldNot().AdhereTo(static _ => true, null!));
+    }
+
+    [Fact]
+    public void AdhereTo_rejects_an_empty_message()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Files(Graph(Self("a.cs")), Reader("text")).ShouldNot().AdhereTo(static _ => true, string.Empty));
+    }
+
+    [Fact]
+    public void Two_moods_off_one_selection_do_not_see_each_other_with_adhere_to()
+    {
+        var files = new Files(Graph(Self("Car.cs"), Self("Truck.cs")), Reader("text"));
+
+        var should = files.Should().AdhereTo(static detail => detail.NameWithoutExtension == "Car", "is named Car");
+        var shouldNot = files.ShouldNot().AdhereTo(static detail => detail.NameWithoutExtension == "Car", "is named Car");
+
+        Assert.Equal(new[] { new AdhereToViolation("Truck.cs", "is named Car") }, should.Check());
+        Assert.Equal(new[] { new AdhereToViolation("Car.cs", "is named Car") }, shouldNot.Check());
+        Assert.Equal(new[] { "Car.cs", "Truck.cs" }, files.Select());
+    }
+
+    private static Func<string, string> Reader(string content) => _ => content;
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

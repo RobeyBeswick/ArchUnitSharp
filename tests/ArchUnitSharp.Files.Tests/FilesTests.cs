@@ -166,6 +166,57 @@ public class FilesTests
         Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs"))).InFile(null!));
     }
 
+    [Fact]
+    public void FileDetailOf_reads_through_the_provider()
+    {
+        var files = new Files(Graph(Self("src/Models/Car.cs")), identifier => $"content of {identifier}");
+
+        FileDetail detail = files.FileDetailOf("src/Models/Car.cs");
+
+        Assert.Equal("content of src/Models/Car.cs", detail.SourceText);
+        Assert.Equal("src/Models/Car.cs", detail.Path);
+    }
+
+    [Fact]
+    public void A_branch_keeps_the_source_provider_of_its_parent()
+    {
+        var parent = new Files(Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")), _ => "source");
+
+        var named = parent.WithName("Car.cs");
+
+        Assert.Equal("source", named.FileDetailOf("src/Models/Car.cs").SourceText);
+        Assert.Equal("source", parent.FileDetailOf("src/Models/Car.cs").SourceText);
+    }
+
+    [Fact]
+    public void Two_branches_off_one_parent_share_the_source_provider()
+    {
+        var parent = new Files(
+            Graph(Self("src/Models/Car.cs"), Self("src/App/Program.cs")),
+            _ => "source");
+
+        var cars = parent.WithName("Car.cs");
+        var inApp = parent.InFolder("src/App");
+
+        Assert.Equal("source", cars.FileDetailOf("src/Models/Car.cs").SourceText);
+        Assert.Equal("source", inApp.FileDetailOf("src/App/Program.cs").SourceText);
+        Assert.Equal("source", parent.FileDetailOf("src/App/Program.cs").SourceText);
+    }
+
+    [Fact]
+    public void FileDetailOf_without_a_provider_raises_a_user_error()
+    {
+        var files = new Files(Graph(Self("a.cs")));
+
+        Assert.Throws<UserError>(() => files.FileDetailOf("a.cs"));
+    }
+
+    [Fact]
+    public void The_internal_constructor_rejects_a_null_provider()
+    {
+        Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs")), null!));
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

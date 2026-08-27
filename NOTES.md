@@ -1,5 +1,18 @@
 # NOTES
 
+WHY: Issue 22 — `adhere to(fn, message)` hands the custom predicate a type named `FileDetail`, not the
+`FileInfo` the issue names, because `System.IO.FileInfo` sits in every consumer's implicit global usings
+and a public type of that name would make the predicate's parameter ambiguous for anyone using both
+namespaces; `FileDetail` carries exactly the six fields the issue lists.
+
+WHY: Issue 22 — the adhere-to assertion reads each selected file's source text through a provider the
+composition root wires onto the `Files` selection (the entry points read from the located project's
+root, lazily, per selected file and per check), because the graph stores only identifiers and the issue
+requires full source text; eager content materialisation at the entry point would re-read every file on
+every call and defeat the graph cache. The provider is the module's only disk boundary and is injected,
+so the pure projections and the shared assertion never touch the filesystem themselves, and a selection
+built from a bare graph raises a `UserError` instead of fabricating empty text.
+
 WHY: Issue 21 — `should (not) depend on external modules` is a new object type
 `DependOnExternalModules` with a `Matching` selector: a glob matched against the external edge target,
 which the resolver keeps as the module name as written (e.g. `System.Linq`). Repeats combine with OR,

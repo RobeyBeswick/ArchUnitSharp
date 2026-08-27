@@ -344,4 +344,102 @@ public class ProjectTests
 
         Assert.Equal(new[] { new FileViolation("src/Models/Car.cs") }, violations);
     }
+
+    [Fact]
+    public void ProjectFiles_should_adhere_to_passes_when_every_file_satisfies_the_predicate()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .AdhereTo(static detail => detail.NonBlankLineCount <= 2, "every file is short")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_adhere_to_flags_files_the_predicate_rejects()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using System;\nnamespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .AdhereTo(static detail => detail.NonBlankLineCount <= 1, "every file is one line")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new AdhereToViolation("src/App/Program.cs", "every file is one line") },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_not_adhere_to_flags_files_the_predicate_accepts()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using System;\nnamespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .ShouldNot()
+            .AdhereTo(static detail => detail.NonBlankLineCount > 1, "no file has more than one line")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new AdhereToViolation("src/App/Program.cs", "no file has more than one line") },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_adhere_to_sees_the_full_source_text()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "// archunit: marker\nnamespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .Should()
+            .AdhereTo(static detail => detail.SourceText.Contains("marker"), "every file carries the marker")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new AdhereToViolation("src/Models/Car.cs", "every file carries the marker") },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_should_adhere_to_guards_a_selection_that_matches_nothing()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .WithName("Car.cs")
+            .Should()
+            .AdhereTo(static _ => true, "message")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should adhere to 'message'") },
+            violations);
+    }
 }
