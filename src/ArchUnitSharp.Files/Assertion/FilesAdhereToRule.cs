@@ -6,7 +6,7 @@ using ArchUnitSharp.Common.Extraction;
 /// The terminal of a <c>should adhere to</c> / <c>should not adhere to</c> files rule, returned by
 /// <see cref="Should.AdhereTo"/> and <see cref="ShouldNot.AdhereTo"/>. Checking it runs the shared
 /// <see cref="FilesAssertion.AdhereTo"/> assertion with the mood flag the rule was built with, which
-/// is where the empty-test guard lives.
+/// routes an empty selection through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

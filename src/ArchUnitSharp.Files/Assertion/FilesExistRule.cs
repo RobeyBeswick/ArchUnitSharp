@@ -5,8 +5,8 @@ using ArchUnitSharp.Common.Extraction;
 /// <summary>
 /// The terminal of a <c>should exist</c> / <c>should not exist</c> files rule, returned by
 /// <see cref="Should.Exist"/> and <see cref="ShouldNot.Exist"/>. Checking it runs the shared
-/// <see cref="FilesAssertion.Exist"/> assertion with the mood flag the rule was built with, which is
-/// where the empty-test guard lives.
+/// <see cref="FilesAssertion.Exist"/> assertion with the mood flag the rule was built with, which
+/// routes an empty selection through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

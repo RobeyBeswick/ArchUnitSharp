@@ -5,7 +5,7 @@ using ArchUnitSharp.Common.Extraction;
 /// <summary>
 /// The terminal of a <c>should have no cycles</c> files rule, returned by
 /// <see cref="Should.HaveNoCycles"/>. Checking it runs the shared <see cref="FilesAssertion.Cycles"/>
-/// assertion, which is where the empty-test guard lives.
+/// assertion, which routes an empty selection through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

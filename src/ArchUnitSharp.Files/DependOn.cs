@@ -10,7 +10,8 @@ using ArchUnitSharp.Files.Assertion;
 /// and <see cref="ShouldNot.DependOn"/>; its selector methods narrow the object with the same words a
 /// scope uses, so an object reads as <c>files with name 'X'</c>, and selectors combine with AND — a
 /// dependency target must match every one of them. Checking it runs the shared
-/// <see cref="FilesAssertion.DependOn"/> assertion, which is where the empty-test guard lives.
+/// <see cref="FilesAssertion.DependOn"/> assertion, which routes an empty selection or object through
+/// the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

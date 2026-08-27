@@ -6,7 +6,7 @@ using ArchUnitSharp.Common.Extraction;
 /// The terminal of a <c>should have name</c> / <c>should not have name</c> files rule, returned by
 /// <see cref="Should.HaveName"/> and <see cref="ShouldNot.HaveName"/>. Checking it runs the shared
 /// <see cref="FilesAssertion.HaveName"/> assertion with the mood flag the rule was built with, which
-/// is where the empty-test guard lives.
+/// routes an empty selection through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

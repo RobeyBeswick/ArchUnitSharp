@@ -6,33 +6,38 @@ using ArchUnitSharp.Files.Projection;
 /// <summary>
 /// The files module's shared assertion: the one place a files rule's outcome is computed. The mood of
 /// a rule arrives as the <c>negate</c> boolean — there is no separate code path for
-/// <c>should not</c> — and the empty-test guard runs for every assertion, so every terminal that
-/// calls in here reaches it. The <c>should have no cycles</c> predicate, which the public surface
-/// exposes only in the positive mood, arrives without a mood flag.
+/// <c>should not</c> — and every assertion routes an empty selection through the shared
+/// <see cref="EmptyTestGuard"/>, so every terminal that calls in here reaches the guard. The
+/// <c>should have no cycles</c> predicate, which the public surface exposes only in the positive mood,
+/// arrives without a mood flag.
 /// </summary>
 /// <remarks>
 /// <para>
 /// An assertion checks the <see cref="Files.Select"/> result of the rule's selection. A selection
 /// that matched nothing is a violation (<see cref="EmptyTestViolation"/>) unless
-/// <see cref="CheckOptions.AllowEmptyTests"/> is set, which is the guard every terminal in the
-/// library reaches. A non-empty selection passes the positive mood of the existence rule and, for the
-/// negated mood, yields one <see cref="FileViolation"/> per selected file. The naming and location
+/// <see cref="CheckOptions.AllowEmptyTests"/> is set, which is the shared
+/// <see cref="EmptyTestGuard"/> every terminal in the library reaches. A non-empty selection passes
+/// the positive mood of the existence rule and, for the negated mood, yields one
+/// <see cref="FileViolation"/> per selected file. The naming and location
 /// predicates — <c>should (not) have name</c>, <c>should (not) be in folder</c>,
 /// <c>should (not) be in path</c> — match each selected file's name, folder or path against the
 /// rule's glob and yield one <see cref="FileViolation"/> per file that violates the mood, in either
 /// mood. The depend-on predicate — <c>should (not) depend on files</c> — matches each selected
 /// file's dependencies against the object's selectors and yields one <see cref="FileViolation"/> per
 /// selected file that depends on none of them (positive mood) or one
-/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports
-/// a rule whose selection or object matched nothing. The external-modules predicate —
+/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the
+/// <see cref="EmptyTestGuard"/> reports a rule whose selection or object matched nothing. The
+/// external-modules predicate —
 /// <c>should (not) depend on external modules</c> — matches each selected file's external
 /// dependencies against the object's selectors the same way: one <see cref="FileViolation"/> per
 /// selected file that depends on no matching module (positive mood), or one
-/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the guard reports a
-/// rule whose selection or object matched nothing. The adhere-to predicate — <c>should (not) adhere
+/// <see cref="DependencyViolation"/> per offending dependency (negated mood), and the
+/// <see cref="EmptyTestGuard"/> reports a rule whose selection or object matched nothing. The
+/// adhere-to predicate — <c>should (not) adhere
 /// to</c> — hands each selected file's <see cref="FileDetail"/> to the rule's custom predicate and
 /// yields one <see cref="AdhereToViolation"/> per file whose verdict contradicts the mood, and the
-/// guard reports a selection that matched nothing. A selection whose dependencies form a cycle
+/// <see cref="EmptyTestGuard"/> reports a selection that matched nothing. A selection whose
+/// dependencies form a cycle
 /// yields one <see cref="CycleViolation"/> per cycle.
 /// </para>
 /// <para>
@@ -59,13 +64,8 @@ internal static class FilesAssertion
 
         if (selected.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
             string rule = $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} exist";
-            return new Violation[] { new EmptyTestViolation(rule) };
+            return EmptyTestGuard.Guard(rule, options);
         }
 
         if (!negate)
@@ -96,13 +96,8 @@ internal static class FilesAssertion
 
         if (selected.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
             string rule = $"{files.DescribeScope()} should have no cycles";
-            return new Violation[] { new EmptyTestViolation(rule) };
+            return EmptyTestGuard.Guard(rule, options);
         }
 
         return files.Cycles()
@@ -173,7 +168,8 @@ internal static class FilesAssertion
     /// source text and non-blank line count — is handed to the rule's custom predicate. With the
     /// positive mood a selected file the predicate rejects is reported as one
     /// <see cref="AdhereToViolation"/> carrying the rule's message; with the negated mood a selected
-    /// file the predicate accepts is. The empty-test guard reports a selection that matched nothing.
+    /// file the predicate accepts is. The <see cref="EmptyTestGuard"/> reports a selection that matched
+    /// nothing.
     /// </summary>
     /// <param name="files">The selection the rule asserts over. Must not be <see langword="null"/>.</param>
     /// <param name="predicate">The rule's custom predicate. Must not be <see langword="null"/>.</param>
@@ -200,13 +196,9 @@ internal static class FilesAssertion
 
         if (selected.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
-            string rule = $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} adhere to '{message}'";
-            return new Violation[] { new EmptyTestViolation(rule) };
+            string rule =
+                $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} adhere to '{message}'";
+            return EmptyTestGuard.Guard(rule, options);
         }
 
         return selected
@@ -220,8 +212,8 @@ internal static class FilesAssertion
     /// file's dependencies are matched against the rule's object selectors. With the positive mood a
     /// selected file that depends on no file matching every object selector is reported as one
     /// <see cref="FileViolation"/>; with the negated mood each dependency on a file matching every
-    /// object selector is reported as one <see cref="DependencyViolation"/>. The empty-test guard
-    /// reports a rule whose selection or object matched nothing.
+    /// object selector is reported as one <see cref="DependencyViolation"/>. The
+    /// <see cref="EmptyTestGuard"/> reports a rule whose selection or object matched nothing.
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
@@ -237,14 +229,9 @@ internal static class FilesAssertion
 
         if (subject.Count == 0 || objects.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
             string description =
                 $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
-            return new Violation[] { new EmptyTestViolation(description) };
+            return EmptyTestGuard.Guard(description, options);
         }
 
         IReadOnlyList<Edge> dependencies =
@@ -272,8 +259,8 @@ internal static class FilesAssertion
     /// selectors. With the positive mood a selected file that depends on no external module matching
     /// any object selector is reported as one <see cref="FileViolation"/>; with the negated mood each
     /// dependency on an external module matching any object selector is reported as one
-    /// <see cref="DependencyViolation"/>. The empty-test guard reports a rule whose selection or
-    /// object matched nothing.
+    /// <see cref="DependencyViolation"/>. The <see cref="EmptyTestGuard"/> reports a rule whose selection
+    /// or object matched nothing.
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
@@ -291,14 +278,9 @@ internal static class FilesAssertion
 
         if (subject.Count == 0 || modules.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
             string description =
                 $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
-            return new Violation[] { new EmptyTestViolation(description) };
+            return EmptyTestGuard.Guard(description, options);
         }
 
         IReadOnlyList<Edge> dependencies =
@@ -334,14 +316,9 @@ internal static class FilesAssertion
 
         if (selected.Count == 0)
         {
-            if (options?.AllowEmptyTests == true)
-            {
-                return new Violation[0];
-            }
-
             string rule =
                 $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} {predicatePhrase} '{filter.Pattern.Glob}'";
-            return new Violation[] { new EmptyTestViolation(rule) };
+            return EmptyTestGuard.Guard(rule, options);
         }
 
         return selected

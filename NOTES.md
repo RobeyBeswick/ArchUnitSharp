@@ -1,5 +1,14 @@
 # NOTES
 
+WHY: Issue 23 — the empty-test guard lands as a shared kernel primitive (`EmptyTestGuard` in
+`Common.Extraction`) that every terminal routes its empty selection through, because the only
+terminals in the library today are the files ones and each already guarded inline; the issue's "on
+every terminal, not just the files ones" is made structural by centralising the consequence (default →
+`EmptyTestViolation`, opt-out via `CheckOptions.AllowEmptyTests`) in Common, so a future Layers/Slices/
+Graph/Metrics terminal reaches the same guard by construction and cannot hand-roll a weaker one. Each
+rule still decides what "matched nothing" means for itself (subject alone, or subject-or-object for
+the depend-on predicates); only the consequence is shared.
+
 WHY: Issue 22 — `adhere to(fn, message)` hands the custom predicate a type named `FileDetail`, not the
 `FileInfo` the issue names, because `System.IO.FileInfo` sits in every consumer's implicit global usings
 and a public type of that name would make the predicate's parameter ambiguous for anyone using both

@@ -6,7 +6,7 @@ using ArchUnitSharp.Common.Extraction;
 /// The terminal of a <c>should be in path</c> / <c>should not be in path</c> files rule, returned by
 /// <see cref="Should.BeInPath"/> and <see cref="ShouldNot.BeInPath"/>. Checking it runs the shared
 /// <see cref="FilesAssertion.BeInPath"/> assertion with the mood flag the rule was built with, which
-/// is where the empty-test guard lives.
+/// routes an empty selection through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>

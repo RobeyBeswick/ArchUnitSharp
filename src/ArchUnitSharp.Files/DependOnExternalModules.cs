@@ -11,8 +11,8 @@ using ArchUnitSharp.Files.Assertion;
 /// <see cref="ShouldNot.DependOnExternalModules"/>; its <see cref="Matching"/> selector narrows the
 /// object to the external modules whose name matches the given glob, and repeats combine with OR — a
 /// module is selected when any one selector matches its name. Checking it runs the shared
-/// <see cref="FilesAssertion.DependOnExternalModules"/> assertion, which is where the empty-test guard
-/// lives.
+/// <see cref="FilesAssertion.DependOnExternalModules"/> assertion, which routes an empty selection or
+/// object through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>
