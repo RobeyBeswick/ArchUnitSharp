@@ -12,6 +12,7 @@
   <ItemGroup>
     <ProjectReference Include="..\ArchUnitSharp.Common\ArchUnitSharp.Common.csproj" />
     <ProjectReference Include="..\ArchUnitSharp.Files\ArchUnitSharp.Files.csproj" />
+    <ProjectReference Include="..\ArchUnitSharp.Layers\ArchUnitSharp.Layers.csproj" />
   </ItemGroup>
 
 </Project>

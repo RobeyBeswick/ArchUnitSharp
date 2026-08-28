@@ -1,5 +1,18 @@
 # NOTES
 
+WHY: Issue 27 — the layers module's mood is expressed as the modal predicates `may only depend on
+layers(...)` and `may not depend on layers(...)` (chained on one subject via `LayerRule`) rather than
+AGENTS.md's `Should`/`ShouldNot` mood grammar, because the issue names the layer policy in modal terms
+and "blocklist rules are evaluated before allowlist rules" requires both kinds of constraint on the
+same checked rule, which the single-mood/one-predicate chain cannot express; the fixed
+`Should*` threshold vocabulary remains for the modules whose issues define it.
+
+WHY: Issue 27 — `ArchUnitSharp.Testing` gains a project reference to `ArchUnitSharp.Layers` (mirroring
+its existing reference to `ArchUnitSharp.Files`) so `ViolationFactory` can render the new
+`LayerViolation`; the issue does not name the reference, but the factory's own doc calls an unhandled
+violation subtype a defect, so the reference is the smallest way to keep "all message formatting lives
+in Testing" true for the new type.
+
 WHY: Issue 26 — the native xUnit integration ships as a new project `ArchUnitSharp.Testing.Xunit`
 (`XunitAssert` + the `AssertPasses`/`AssertFails` extensions), not inside `ArchUnitSharp.Testing`,
 because the agnostic module must stay free of any framework dependency and issue 25's shadowing
@@ -186,3 +199,4 @@ restore, build (0 warnings, 0 errors), format --verify-no-changes, 112 extractio
 tests passed (test-attribute count 166 at base -> 213 now, nothing removed, nothing skipped), no
 vulnerable packages. The crash is the reviewer-tooling hang class already noted in Round 2, not a
 code defect; there is nothing to fix.
+WHY: Reviewer requested the external-edge test add only a declared layer matching the external target, but FilesOf() resolves layers to distinct edge sources, so an external target is never a layer file and the suggested fixture cannot detect removal of the edge.External filter. Built the hazard by also declaring the external target as a graph node (Self("System.Linq")) so it belongs to a declared layer; without the filter the edge is reported, with it the projection is empty.

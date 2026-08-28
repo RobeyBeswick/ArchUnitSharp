@@ -2,6 +2,7 @@ namespace ArchUnitSharp.Testing;
 
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Files;
+using ArchUnitSharp.Layers;
 
 /// <summary>
 /// The single place a <see cref="Violation"/> becomes a human-readable message: given a violation's
@@ -16,9 +17,9 @@ using ArchUnitSharp.Files;
 /// text a module hands the empty-test guard arrives as the violation's <em>data</em>; this factory
 /// turns it into the report sentence. The concrete subtypes the library defines today are each
 /// handled — <see cref="EmptyTestViolation"/>, <see cref="FileViolation"/>,
-/// <see cref="AdhereToViolation"/>, <see cref="DependencyViolation"/> and
-/// <see cref="CycleViolation"/> — and a violation subtype this factory does not know is a defect, so
-/// it throws rather than fabricate a message.
+/// <see cref="AdhereToViolation"/>, <see cref="DependencyViolation"/>,
+/// <see cref="CycleViolation"/> and <see cref="LayerViolation"/> — and a violation subtype this
+/// factory does not know is a defect, so it throws rather than fabricate a message.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use; the strings it returns are freshly built on
@@ -43,6 +44,9 @@ public static class ViolationFactory
             FileViolation v => $"File '{v.File}' violates the rule.",
             AdhereToViolation v => $"File '{v.File}' violates the rule: {v.Message}",
             DependencyViolation v => $"File '{v.Source}' must not depend on '{v.Target}'.",
+            LayerViolation v =>
+                $"Layer '{v.SubjectLayer}': file '{v.Source}' must not depend on file '{v.Target}' "
+                + $"in layer '{v.TargetLayer}'.",
             CycleViolation v => $"Cycle: {v.Path}",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(violation),

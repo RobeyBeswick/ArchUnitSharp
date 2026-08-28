@@ -6,14 +6,15 @@ using ArchUnitSharp.Extraction;
 /// <summary>
 /// The composition root and the DSL's entry points: the noun phrases that begin a rule chain.
 /// <c>project files</c> (alias <c>files</c>) locates a project, extracts its dependency graph and
-/// hands the caller the files module's fluent surface over that graph.
+/// hands the caller the files module's fluent surface over that graph; <c>project layers</c> (alias
+/// <c>layers</c>) does the same for the layers module's named-layer policy surface.
 /// </summary>
 /// <remarks>
 /// <para>
-/// Each entry point returns an immutable <see cref="ArchUnitSharp.Files.Files"/> selection. The
-/// parameterless overloads locate the project from the current working directory; the overloads that
-/// take a <see cref="ProjectLocation"/> analyse exactly the located project, which is how a caller
-/// targets a repository other than the current one.
+/// Each entry point returns an immutable <see cref="ArchUnitSharp.Files.Files"/> selection or
+/// <see cref="ArchUnitSharp.Layers.Layers"/> policy. The parameterless overloads locate the project
+/// from the current working directory; the overloads that take a <see cref="ProjectLocation"/> analyse
+/// exactly the located project, which is how a caller targets a repository other than the current one.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The extraction it triggers goes through the
@@ -61,6 +62,42 @@ public static class Project
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
     public static ArchUnitSharp.Files.Files Files(ProjectLocation location) => ProjectFiles(location);
+
+    /// <summary>
+    /// <c>project layers</c>: a named-layer policy builder over the project located from the current
+    /// working directory.
+    /// </summary>
+    /// <returns>A layer policy over every file of the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Layers.Layers ProjectLayers() => Layers(ProjectLocator.Locate());
+
+    /// <summary>
+    /// <c>project layers</c>: a named-layer policy builder over exactly the given project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>A layer policy over every file of the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Layers.Layers ProjectLayers(ProjectLocation location) => Layers(location);
+
+    /// <summary>
+    /// <c>layers</c>, the alias of <c>project layers</c>: a named-layer policy builder over the
+    /// project located from the current working directory.
+    /// </summary>
+    /// <returns>A layer policy over every file of the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Layers.Layers Layers() => Layers(ProjectLocator.Locate());
+
+    /// <summary>
+    /// <c>layers</c>, the alias of <c>project layers</c>: a named-layer policy builder over exactly
+    /// the given project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>A layer policy over every file of the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Layers.Layers Layers(ProjectLocation location) =>
+        new ArchUnitSharp.Layers.Layers(GraphCache.Get(location));
 
     /// <summary>
     /// The source-text provider's disk half: reads one file's full text, given its project-relative

@@ -1,5 +1,6 @@
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Files;
+using ArchUnitSharp.Layers;
 
 namespace ArchUnitSharp.Testing.Tests;
 
@@ -60,6 +61,23 @@ public class ViolationFactoryTests
         string message = ViolationFactory.Format(violation);
 
         Assert.Equal("Cycle: src/A.cs → src/B.cs → src/A.cs", message);
+    }
+
+    [Fact]
+    public void A_layer_violation_names_the_layers_and_the_dependency()
+    {
+        var violation = new LayerViolation(
+            "Services",
+            "src/Services/CarService.cs",
+            "src/Models/Car.cs",
+            "Models");
+
+        string message = ViolationFactory.Format(violation);
+
+        Assert.Equal(
+            "Layer 'Services': file 'src/Services/CarService.cs' must not depend on file "
+            + "'src/Models/Car.cs' in layer 'Models'.",
+            message);
     }
 
     [Fact]

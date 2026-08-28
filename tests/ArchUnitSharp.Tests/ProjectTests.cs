@@ -4,6 +4,7 @@ using ArchUnitSharp.Files;
 
 namespace ArchUnitSharp.Tests;
 
+[Collection("cwd")]
 public class ProjectTests
 {
     [Fact]
