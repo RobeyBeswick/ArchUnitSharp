@@ -1,5 +1,33 @@
 # NOTES
 
+WHY: Issue 27 — the layers module's rule vocabulary is `may only depend on layers(...)` /
+`may not depend on layers(...)`, not the files module's `should` / `should not`: the issue names these
+verbs verbatim and they read as a sentence ("layer App may only depend on layers Models, Services")
+that a plain should/should-not mood cannot reach. The single-boolean rule is still honoured — one
+`negate` flag threads through `LayersAssertion.CheckConstraint`, blocklist true, allowlist false —
+only the words differ.
+
+WHY: Issue 27 — `defined by` binds a whole-path glob (`MatchTarget.Path`) and `defined by folder`
+binds a folder glob (`MatchTarget.PathWithoutFilename`), the same vocabulary the files module's four
+selectors use; the issue does not define the match semantics, and this reading reuses the kernel's
+matching rather than inventing a second one (as issue 16 did for the files selectors).
+
+WHY: Issue 27 — "blocklist rules are evaluated before allowlist rules" lands as: blocklist constraints
+are checked first, and a cross-layer dependency a blocklist already reported on a subject layer is not
+re-reported by an allowlist on the same subject; without that dedup a dependency that is both blocked
+and outside an allowlist would be reported twice.
+
+WHY: Issue 27 — a layer name that is undeclared, or declared but whose glob matches no file, selects
+no files, so the subject-empty and all-targets-empty guards treat both as an empty test rather than a
+`UserError`: a typo in either direction is then a failure, not a silent pass (blocklist) or a blanket
+failure (allowlist). `may not depend on layers()` with no arguments blocks nothing and passes
+trivially; only `may only depend on layers()` is a sealed layer, as the issue specifies.
+
+WHY: Issue 27 — the policy object `ArchUnitSharp.Layers.Layers` is itself the checkable terminal (it
+accumulates declarations and rules and is checked as a whole), rather than the files module's one
+terminal per rule, because the value of the module is expressing an N-layer policy and checking it in
+one `Check()` call; a policy with no rules passes.
+
 WHY: Issue 26 — the native xUnit integration ships as a new project `ArchUnitSharp.Testing.Xunit`
 (`XunitAssert` + the `AssertPasses`/`AssertFails` extensions), not inside `ArchUnitSharp.Testing`,
 because the agnostic module must stay free of any framework dependency and issue 25's shadowing

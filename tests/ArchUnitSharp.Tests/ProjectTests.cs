@@ -1,6 +1,7 @@
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Extraction;
 using ArchUnitSharp.Files;
+using ArchUnitSharp.Layers;
 
 namespace ArchUnitSharp.Tests;
 
@@ -441,5 +442,81 @@ public class ProjectTests
         Assert.Equal(
             new Violation[] { new EmptyTestViolation("project files with name 'Car.cs' should adhere to 'message'") },
             violations);
+    }
+
+    [Fact]
+    public void ProjectLayers_checks_a_named_layer_policy()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.Layers(location)
+            .Layer("App").DefinedByFolder("src/App")
+            .Layer("Models").DefinedByFolder("src/Models")
+            .WhereLayer("App").MayOnlyDependOnLayers("Models")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectLayers_reports_a_forbidden_cross_layer_dependency()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Infra; namespace App { public class Program { } }");
+        project.WriteFile("src/Infra/Db.cs", "namespace App.Infra { public class Db { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.Layers(location)
+            .Layer("App").DefinedByFolder("src/App")
+            .Layer("Infra").DefinedByFolder("src/Infra")
+            .WhereLayer("App").MayNotDependOnLayers("Infra")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new LayerViolation("App", "Infra", "src/App/Program.cs", "src/Infra/Db.cs") },
+            violations);
+    }
+
+    [Fact]
+    public void Layers_alias_returns_a_policy_like_project_layers()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> canonical = Project.ProjectLayers(location)
+            .Layer("App").DefinedByFolder("src/App")
+            .Layer("Models").DefinedByFolder("src/Models")
+            .WhereLayer("App").MayOnlyDependOnLayers("Models")
+            .Check();
+        IReadOnlyList<Violation> alias = Project.Layers(location)
+            .Layer("App").DefinedByFolder("src/App")
+            .Layer("Models").DefinedByFolder("src/Models")
+            .WhereLayer("App").MayOnlyDependOnLayers("Models")
+            .Check();
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void ProjectLayers_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.ProjectLayers(null!));
+    }
+
+    [Fact]
+    public void Layers_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.Layers(null!));
     }
 }
