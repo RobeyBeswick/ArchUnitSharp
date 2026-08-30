@@ -1,5 +1,46 @@
 # NOTES
 
+WHY: Issue 28 — the graph module's public builder is named `GraphReport`, not `Graph` as the
+Files/Layers type-named-after-the-entry-noun convention would suggest, because the kernel's own
+`ArchUnitSharp.Common.Extraction.Graph` is the library's central type: a second public `Graph` would
+make the identifier ambiguous (CS0104) for any consumer importing both `ArchUnitSharp.Graph` and
+`ArchUnitSharp.Common.Extraction`, which is the common case. The entry points are still `project graph`
+/ `graph` (`Project.ProjectGraph()` / `Project.Graph()`), returning a `GraphReport`; the root project
+spells the return type `ArchUnitSharp.Graph.GraphReport` in full as the Files note requires.
+
+WHY: Issue 28 — the query surface ships two terminals: `Build()` returns the `GraphSnapshot` (data,
+no empty-test guard — an empty report is visible data, not a silent pass), and `Check()` implements
+`ICheckable` and routes an empty scope through the shared `EmptyTestGuard`, honouring the query's own
+`with check options` bag (overridable per call). This keeps the report builder on the `ICheckable`
+seam — "every terminal implements it" — while making `with check options` meaningful, and the guard
+fires on the snapshot's scope (the file set) matching nothing, which is the report's "rule matched
+nothing".
+
+WHY: Issue 28 — the issue does not fix the semantics of the query options, so they land as: the
+focus / reachable / dependents restrictions *intersect* (a file is in scope only when every applied
+restriction selects it), focus is the seed files plus everything within `depth` hops in *either*
+direction, and reachability never traverses external edges (an external target is not a file). The
+edge set is every raw dependency with a scoped source; internal targets must also be scoped, external
+edges need `including external dependencies`, and marker self-edges need `including self
+dependencies` — but a dependency between two files of the same collapsed label surfaces as a
+self-loop regardless, because that is real dependency data the option only controls the marker edges
+for.
+
+WHY: Issue 28 — collapse semantics: a folder-depth rule relabels each file to its folder truncated to
+the first n path segments, the whole folder when shallower, and the literal root bucket `.` for
+root-level files and depth zero (the kernel's folder target yields the empty string for root-level
+files, which no node label may be); a pattern rule relabels the files matching its glob to one bucket
+labeled with the glob itself; rules apply in order and the first that relabels a file wins, so a
+folder-depth rule relabels everything and must come after any pattern rules. External targets are
+never relabelled — they keep the module name as written.
+
+WHY: Issue 28 — the module needs no Assertion sub-namespace (a report is not a rule; the empty-test
+consequence is the kernel's `EmptyTestGuard`), so its internal shape is the fluent surface plus the
+`Projection` sub-namespace, the same split Files and Layers use; the snapshot's nodes carry the file
+identifiers behind each label and an external flag (empty files for an external-module node), which
+the issue does not enumerate for nodes, so a renderer can annotate and drill into a node and
+distinguish external module targets.
+
 WHY: Issue 27 — the layers module's rule vocabulary is `may only depend on layers(...)` /
 `may not depend on layers(...)`, not the files module's `should` / `should not`: the issue names these
 verbs verbatim and they read as a sentence ("layer App may only depend on layers Models, Services")

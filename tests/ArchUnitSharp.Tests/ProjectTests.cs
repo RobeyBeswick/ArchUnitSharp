@@ -1,6 +1,7 @@
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Extraction;
 using ArchUnitSharp.Files;
+using ArchUnitSharp.Graph;
 using ArchUnitSharp.Layers;
 
 namespace ArchUnitSharp.Tests;
@@ -518,5 +519,77 @@ public class ProjectTests
     public void Layers_rejects_a_null_location()
     {
         Assert.Throws<ArgumentNullException>(() => Project.Layers(null!));
+    }
+
+    [Fact]
+    public void ProjectGraph_builds_a_snapshot_over_the_given_project()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        GraphSnapshot snapshot = Project.ProjectGraph(location)
+            .CollapsedToFolderDepth(2)
+            .Titled("app")
+            .Build();
+
+        Assert.Equal("app", snapshot.Title);
+        Assert.Equal(2, snapshot.NodeCount);
+        Assert.Equal(
+            new[]
+            {
+                new SnapshotNode("src/App", new[] { "src/App/Program.cs" }, external: false),
+                new SnapshotNode("src/Models", new[] { "src/Models/Car.cs" }, external: false),
+            },
+            snapshot.Nodes);
+        Assert.Equal(
+            new[]
+            {
+                new SnapshotEdge("src/App", "src/Models", count: 1, external: false, ImportKind.Using),
+            },
+            snapshot.Edges);
+    }
+
+    [Fact]
+    public void Graph_alias_builds_the_same_snapshot_as_project_graph()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        GraphSnapshot canonical = Project.ProjectGraph(location).CollapsedToFolderDepth(2).Build();
+        GraphSnapshot alias = Project.Graph(location).CollapsedToFolderDepth(2).Build();
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void ProjectGraph_checks_the_scope_of_a_real_project()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        Assert.Empty(Project.ProjectGraph(location).Check());
+    }
+
+    [Fact]
+    public void ProjectGraph_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.ProjectGraph(null!));
+    }
+
+    [Fact]
+    public void Graph_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.Graph(null!));
     }
 }
