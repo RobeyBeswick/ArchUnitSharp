@@ -1,8 +1,6 @@
 namespace ArchUnitSharp.Graph.Rendering;
 
 using System.Text;
-using ArchUnitSharp.Graph.Projection;
-using ArchUnitSharp.Projection;
 
 /// <summary>
 /// Renders a <see cref="GraphSnapshot"/> as a self-contained HTML page: one file, every style inline
@@ -119,7 +117,7 @@ internal static class HtmlRenderer
         builder.Append("</marker>\n");
         builder.Append("</defs>\n");
 
-        foreach (ProjectedEdge edge in snapshot.Edges)
+        foreach (SnapshotEdge edge in snapshot.Edges)
         {
             int sourceRight = x[edge.Source] + nodeWidth;
             int sourceMid = y[edge.Source] + NodeHeight / 2;
@@ -161,7 +159,7 @@ internal static class HtmlRenderer
             incoming[label] = new List<string>();
         }
 
-        foreach (ProjectedEdge edge in snapshot.Edges)
+        foreach (SnapshotEdge edge in snapshot.Edges)
         {
             if (incoming.TryGetValue(edge.Target, out List<string>? predecessors))
             {

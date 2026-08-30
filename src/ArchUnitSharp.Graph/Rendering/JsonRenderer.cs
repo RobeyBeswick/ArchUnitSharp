@@ -1,12 +1,10 @@
 namespace ArchUnitSharp.Graph.Rendering;
 
 using System.Text;
-using ArchUnitSharp.Graph.Projection;
-using ArchUnitSharp.Projection;
 
 /// <summary>
 /// Renders a <see cref="GraphSnapshot"/> as a JSON document: a <c>nodes</c> array with one object per
-/// file of the snapshot and an <c>edges</c> array with one object per projected edge carrying its
+/// file of the snapshot and an <c>edges</c> array with one object per aggregated edge carrying its
 /// source, target, external flag and union of import kinds.
 /// </summary>
 /// <remarks>

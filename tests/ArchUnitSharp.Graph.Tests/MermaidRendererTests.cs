@@ -75,7 +75,7 @@ public class MermaidRendererTests
     }
 
     private static GraphSnapshot Snapshot(params Edge[] edges) =>
-        GraphProjection.Snapshot(new ArchUnitSharp.Common.Extraction.Graph(edges));
+        GraphProjection.Build(new ArchUnitSharp.Common.Extraction.Graph(edges), new GraphQueryOptions { IncludeExternalDependencies = true });
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
 

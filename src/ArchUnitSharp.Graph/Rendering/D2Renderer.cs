@@ -1,11 +1,8 @@
 namespace ArchUnitSharp.Graph.Rendering;
 
-using ArchUnitSharp.Graph.Projection;
-using ArchUnitSharp.Projection;
-
 /// <summary>
 /// Renders a <see cref="GraphSnapshot"/> as a D2 diagram: every file of the snapshot becomes a quoted
-/// node declaration, every external target a quoted declaration of its own, and every projected edge
+/// node declaration, every external target a quoted declaration of its own, and every aggregated edge
 /// an arrow between the two quoted identifiers.
 /// </summary>
 /// <remarks>
@@ -44,7 +41,7 @@ internal static class D2Renderer
             lines.Add($"\"{RenderEscapes.D2(label)}\"");
         }
 
-        foreach (ProjectedEdge edge in snapshot.Edges)
+        foreach (SnapshotEdge edge in snapshot.Edges)
         {
             lines.Add($"\"{RenderEscapes.D2(edge.Source)}\" -> \"{RenderEscapes.D2(edge.Target)}\"");
         }

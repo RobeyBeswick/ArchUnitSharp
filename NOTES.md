@@ -1,5 +1,44 @@
 # NOTES
 
+WHY: Issue 28 — the query surface ships two kinds of terminal: `Build()` returns the `GraphSnapshot`
+(data, no empty-test guard — an empty snapshot is visible data, not a silent pass), and `Check()`
+implements `ICheckable` and routes an empty scope through the shared `EmptyTestGuard`, honouring the
+query's own `with check options` bag (overridable per call). This keeps the query builder on the
+`ICheckable` seam — "every terminal implements it" — while making `with check options` meaningful,
+and the guard fires on the snapshot's scope (the file set) matching nothing, which is the report's
+"rule matched nothing"; the render terminals stay unguarded data forms, as the issue-29 note below
+explains.
+
+WHY: Issue 28 — the issue does not fix the semantics of the query options, so they land as: the
+focus / reachable / dependents restrictions *intersect* (a file is in scope only when every applied
+restriction selects it), focus is the seed files plus everything within `depth` hops in *either*
+direction, and reachability never traverses external edges (an external target is not a file). The
+edge set is every raw dependency with a scoped source; internal targets must also be scoped, external
+edges need `including external dependencies`, and marker self-edges need `including self
+dependencies` — but a dependency between two files of the same collapsed label surfaces as a
+self-loop regardless, because that is real dependency data the option only controls the marker edges
+for. External dependencies are excluded by default, which changes the issue-29 snapshot's
+"external dependencies included" behaviour: including them is now an explicit opt-in, the point of
+the option.
+
+WHY: Issue 28 — collapse semantics: a folder-depth rule relabels each file to its folder truncated to
+the first n path segments, the whole folder when shallower, and the literal root bucket `.` for
+root-level files and depth zero (the kernel's folder target yields the empty string for root-level
+files, which no node label may be); a pattern rule relabels the files matching its glob to one bucket
+labeled with the glob itself; rules apply in order and the first that relabels a file wins, so a
+folder-depth rule relabels everything and must come after any pattern rules. External targets are
+never relabelled — they keep the module name as written.
+
+WHY: Issue 28 — the snapshot's nodes are the scope's file labels only; external targets appear solely
+as edge targets, not as nodes, so `SnapshotNode` carries no external flag. The issue does not
+enumerate node contents, and the issue-29 renderers already derive external targets from the edges
+(DOT deliberately leaves them undeclared), so promoting them to nodes would change every format's
+output for no issue-given reason; a `SnapshotEdge` still carries the external flag the issue names.
+The module still needs no Assertion sub-namespace (a report is not a rule; the empty-test consequence
+is the kernel's `EmptyTestGuard`), so its internal shape stays the fluent surface plus the
+`Projection` sub-namespace, with the query's data model (`GraphQueryOptions`, `CollapseRule`) on the
+surface side of that split.
+
 WHY: Issue 29 — the graph module's renderers live in a `Rendering` sub-namespace, not the
 `Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
 the graph module is a report module with no rules, so it has no assertions and no extractions; the
@@ -11,7 +50,8 @@ WHY: Issue 29 — the report terminals (`to ...()` and `export as ...(path)`) do
 empty-test guard: a report over an empty graph renders a valid "0 nodes, 0 edges" document rather
 than raising an `EmptyTestViolation`. The guard is a property of a *rule* — a check that passes or
 fails — and a report is a rendering of data, so an empty graph is a legitimate subject for a report,
-not a defect. The module has no `ICheckable` and its terminals are not `Check()`.
+not a defect. Issue 28 later adds a `Check()` rule terminal to the query surface (the report's "rule
+matched nothing" form, guarded like every other terminal); the render terminals remain unguarded.
 
 WHY: Issue 29 — the file-write boundary of `export as ...(path)` lives in the `GraphReport` surface
 itself (a private `Export` helper), not injected like the Files module's source-text provider:

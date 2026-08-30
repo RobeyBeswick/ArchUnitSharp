@@ -1,12 +1,9 @@
 namespace ArchUnitSharp.Graph.Rendering;
 
-using ArchUnitSharp.Graph.Projection;
-using ArchUnitSharp.Projection;
-
 /// <summary>
 /// Renders a <see cref="GraphSnapshot"/> as a Mermaid flowchart: every file of the snapshot becomes a
 /// quoted node with a stable <c>n</c>-prefixed id, every external target a quoted node of its own,
-/// and every projected edge an arrow between the two ids.
+/// and every aggregated edge an arrow between the two ids.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -47,7 +44,7 @@ internal static class MermaidRenderer
             lines.Add($"  n{i}[\"{RenderEscapes.Mermaid(labels[i])}\"]");
         }
 
-        foreach (ProjectedEdge edge in snapshot.Edges)
+        foreach (SnapshotEdge edge in snapshot.Edges)
         {
             lines.Add($"  {ids[edge.Source]} --> {ids[edge.Target]}");
         }

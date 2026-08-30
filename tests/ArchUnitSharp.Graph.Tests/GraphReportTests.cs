@@ -14,7 +14,7 @@ public class GraphReportTests
             Self("src/Models/Car.cs"),
             Using("src/App/Program.cs", "src/Models/Car.cs"));
         var report = new GraphReport(graph);
-        GraphSnapshot snapshot = GraphProjection.Snapshot(graph);
+        GraphSnapshot snapshot = GraphProjection.Build(graph, GraphQueryOptions.Default);
 
         Assert.Equal(DotRenderer.Render(snapshot), report.ToDot());
         Assert.Equal(MermaidRenderer.Render(snapshot), report.ToMermaid());
@@ -115,9 +115,298 @@ public class GraphReportTests
     }
 
     [Fact]
+    public void Build_is_deterministic_across_calls()
+    {
+        var report = new GraphReport(Graph(
+            Self("a.cs"),
+            Self("b.cs"),
+            Using("a.cs", "b.cs")));
+
+        Assert.Equal(report.Build(), report.Build());
+    }
+
+    [Fact]
+    public void Including_external_dependencies_builds_a_snapshot_with_external_edges()
+    {
+        var report = new GraphReport(Graph(
+            Self("a.cs"),
+            External("a.cs", "System.Linq"))).IncludingExternalDependencies();
+
+        var edge = Assert.Single(report.Build().Edges);
+        Assert.Equal("System.Linq", edge.Target);
+        Assert.True(edge.External);
+    }
+
+    [Fact]
+    public void Including_self_dependencies_builds_a_snapshot_with_self_loops()
+    {
+        var report = new GraphReport(Graph(Self("a.cs"))).IncludingSelfDependencies();
+
+        var edge = Assert.Single(report.Build().Edges);
+        Assert.Equal("a.cs", edge.Source);
+        Assert.Equal("a.cs", edge.Target);
+    }
+
+    [Fact]
+    public void Focusing_on_narrows_the_snapshot_to_the_neighbourhood()
+    {
+        var graph = Graph(
+            Self("A/a.cs"),
+            Self("B/b.cs"),
+            Self("C/c.cs"),
+            Using("A/a.cs", "B/b.cs"),
+            Using("B/b.cs", "C/c.cs"));
+        var report = new GraphReport(graph).FocusingOn("A/a.cs", depth: 1);
+
+        GraphSnapshot snapshot = report.Build();
+        Assert.Equal(
+            new[] { "A/a.cs", "B/b.cs" },
+            snapshot.Nodes.Select(static n => n.Label));
+        Assert.Equal(
+            new[] { ("A/a.cs", "B/b.cs") },
+            snapshot.Edges.Select(static e => (e.Source, e.Target)));
+    }
+
+    [Fact]
+    public void Reachable_from_narrows_the_snapshot_to_the_outgoing_closure()
+    {
+        var graph = Graph(
+            Self("A/a.cs"),
+            Self("B/b.cs"),
+            Self("C/c.cs"),
+            Using("A/a.cs", "B/b.cs"),
+            Using("B/b.cs", "C/c.cs"));
+        var report = new GraphReport(graph).ReachableFrom("A/a.cs");
+
+        Assert.Equal(
+            new[] { "A/a.cs", "B/b.cs", "C/c.cs" },
+            report.Build().Nodes.Select(static n => n.Label));
+    }
+
+    [Fact]
+    public void Dependents_of_narrows_the_snapshot_to_the_incoming_closure()
+    {
+        var graph = Graph(
+            Self("A/a.cs"),
+            Self("B/b.cs"),
+            Self("C/c.cs"),
+            Using("A/a.cs", "C/c.cs"),
+            Using("B/b.cs", "C/c.cs"));
+        var report = new GraphReport(graph).DependentsOf("C/c.cs");
+
+        Assert.Equal(
+            new[] { "A/a.cs", "B/b.cs", "C/c.cs" },
+            report.Build().Nodes.Select(static n => n.Label));
+    }
+
+    [Fact]
+    public void Collapsed_to_folder_depth_changes_the_snapshot_labels()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"));
+        var report = new GraphReport(graph).CollapsedToFolderDepth(1);
+
+        GraphSnapshot snapshot = report.Build();
+
+        Assert.Equal(new[] { "src" }, snapshot.Nodes.Select(static n => n.Label));
+        var edge = Assert.Single(snapshot.Edges);
+        Assert.Equal("src", edge.Source);
+        Assert.Equal("src", edge.Target);
+    }
+
+    [Fact]
+    public void Collapsed_by_pattern_changes_the_snapshot_labels()
+    {
+        var report = new GraphReport(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/App/Program.cs"))).CollapsedByPattern("src/Models/**");
+
+        Assert.Equal(
+            new[] { "src/App/Program.cs", "src/Models/**" },
+            report.Build().Nodes.Select(static n => n.Label));
+    }
+
+    [Fact]
+    public void Titled_sets_the_snapshot_title()
+    {
+        var report = new GraphReport(Graph(Self("a.cs"))).Titled("The app");
+
+        Assert.Equal("The app", report.Build().Title);
+    }
+
+    [Fact]
+    public void Query_options_combine_without_losing_earlier_ones()
+    {
+        var report = new GraphReport(Graph(
+            Self("a.cs"),
+            External("a.cs", "System.Linq")))
+            .IncludingExternalDependencies()
+            .Titled("The app");
+
+        GraphSnapshot snapshot = report.Build();
+
+        Assert.Equal("The app", snapshot.Title);
+        var edge = Assert.Single(snapshot.Edges);
+        Assert.True(edge.External);
+    }
+
+    [Fact]
+    public void Two_branches_off_one_parent_do_not_see_each_others_options()
+    {
+        var graph = Graph(
+            Self("a.cs"),
+            External("a.cs", "System.Linq"));
+        GraphReport parent = new GraphReport(graph);
+        GraphReport external = parent.IncludingExternalDependencies();
+        GraphReport titled = parent.Titled("The app");
+
+        Assert.Single(external.Build().Edges);
+        Assert.Empty(titled.Build().Edges);
+        Assert.Empty(parent.Build().Edges);
+        Assert.Equal("The app", titled.Build().Title);
+        Assert.Empty(external.Build().Title);
+    }
+
+    [Fact]
+    public void Two_branches_off_one_parent_do_not_see_each_others_collapse_rules()
+    {
+        var graph = Graph(
+            Self("A/Models/Car.cs"),
+            Self("B/Service.cs"));
+        GraphReport parent = new GraphReport(graph);
+        GraphReport byFolder = parent.CollapsedToFolderDepth(1);
+        GraphReport byPattern = parent.CollapsedByPattern("A/**");
+
+        Assert.Equal(
+            new[] { "A", "B" },
+            byFolder.Build().Nodes.Select(static n => n.Label));
+        Assert.Equal(
+            new[] { "A/**", "B/Service.cs" },
+            byPattern.Build().Nodes.Select(static n => n.Label));
+        Assert.Equal(
+            new[] { "A/Models/Car.cs", "B/Service.cs" },
+            parent.Build().Nodes.Select(static n => n.Label));
+    }
+
+    [Fact]
+    public void Check_passes_when_the_scope_matches_files()
+    {
+        var report = new GraphReport(Graph(Self("a.cs"), Self("b.cs")));
+
+        Assert.Empty(report.Check());
+    }
+
+    [Fact]
+    public void Check_reports_an_empty_test_violation_for_an_empty_graph()
+    {
+        var report = new GraphReport(Graph());
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project graph") },
+            report.Check());
+    }
+
+    [Fact]
+    public void Check_reports_an_empty_test_violation_when_a_restriction_matches_nothing()
+    {
+        var report = new GraphReport(Graph(Self("a.cs"))).ReachableFrom("No/Such/File.cs");
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project graph reachable from 'No/Such/File.cs'") },
+            report.Check());
+    }
+
+    [Fact]
+    public void WithCheckOptions_allows_an_empty_scope_to_pass()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")))
+            .ReachableFrom("No/Such/File.cs")
+            .WithCheckOptions(new CheckOptions { AllowEmptyTests = true });
+
+        Assert.Empty(report.Check());
+    }
+
+    [Fact]
+    public void Check_options_passed_to_check_override_the_queries_own()
+    {
+        var report = new GraphReport(Graph(Self("a.cs"))).ReachableFrom("No/Such/File.cs");
+
+        Assert.Empty(report.Check(new CheckOptions { AllowEmptyTests = true }));
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project graph reachable from 'No/Such/File.cs'") },
+            report.Check());
+    }
+
+    [Fact]
     public void GraphReport_rejects_a_null_graph()
     {
         Assert.Throws<ArgumentNullException>(() => new GraphReport(null!));
+    }
+
+    [Fact]
+    public void FocusingOn_rejects_a_null_glob()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.FocusingOn(null!, depth: 0));
+    }
+
+    [Fact]
+    public void FocusingOn_rejects_a_negative_depth()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => report.FocusingOn("a.cs", depth: -1));
+    }
+
+    [Fact]
+    public void ReachableFrom_rejects_a_null_glob()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.ReachableFrom(null!));
+    }
+
+    [Fact]
+    public void DependentsOf_rejects_a_null_glob()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.DependentsOf(null!));
+    }
+
+    [Fact]
+    public void CollapsedToFolderDepth_rejects_a_negative_depth()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => report.CollapsedToFolderDepth(-1));
+    }
+
+    [Fact]
+    public void CollapsedByPattern_rejects_a_null_glob()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.CollapsedByPattern(null!));
+    }
+
+    [Fact]
+    public void Titled_rejects_a_null_title()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.Titled(null!));
+    }
+
+    [Fact]
+    public void WithCheckOptions_rejects_null_options()
+    {
+        var report = new GraphReport(Graph(Self("a.cs")));
+
+        Assert.Throws<ArgumentNullException>(() => report.WithCheckOptions(null!));
     }
 
     [Fact]
@@ -163,4 +452,7 @@ public class GraphReportTests
 
     private static Edge Using(string source, string target) =>
         new(source, target, external: false, ImportKind.Using);
+
+    private static Edge External(string source, string module) =>
+        new(source, module, external: true, ImportKind.Using);
 }
