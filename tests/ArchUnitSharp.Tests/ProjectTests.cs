@@ -519,4 +519,64 @@ public class ProjectTests
     {
         Assert.Throws<ArgumentNullException>(() => Project.Layers(null!));
     }
+
+    [Fact]
+    public void ProjectGraph_renders_a_dot_report_of_the_project()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        string dot = Project.ProjectGraph(location).ToDot();
+
+        Assert.Contains("  \"src/App/Program.cs\";", dot);
+        Assert.Contains("  \"src/Models/Car.cs\";", dot);
+        Assert.Contains("  \"src/App/Program.cs\" -> \"src/Models/Car.cs\";", dot);
+    }
+
+    [Fact]
+    public void Graph_alias_renders_a_report_like_project_graph()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        string canonical = Project.ProjectGraph(location).ToDot();
+        string alias = Project.Graph(location).ToDot();
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void ProjectGraph_can_export_every_format_to_disk()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        string dot = Project.ProjectGraph(location).ExportAsDot(project.Root + "/graph.dot");
+        string html = Project.ProjectGraph(location).ExportAsHtml(project.Root + "/graph.html");
+
+        Assert.StartsWith("digraph {", File.ReadAllText(dot));
+        Assert.StartsWith("<!DOCTYPE html>", File.ReadAllText(html));
+    }
+
+    [Fact]
+    public void ProjectGraph_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.ProjectGraph(null!));
+    }
+
+    [Fact]
+    public void Graph_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.Graph(null!));
+    }
 }

@@ -1,5 +1,26 @@
 # NOTES
 
+WHY: Issue 29 — the graph module's renderers live in a `Rendering` sub-namespace, not the
+`Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
+the graph module is a report module with no rules, so it has no assertions and no extractions; the
+snapshot computation is `Projection.GraphProjection` and the six text renderers are
+`Rendering.DotRenderer` / `MermaidRenderer` / `D2Renderer` / `CsvRenderer` / `JsonRenderer` /
+`HtmlRenderer`, the name that says what they do.
+
+WHY: Issue 29 — the report terminals (`to ...()` and `export as ...(path)`) do not implement the
+empty-test guard: a report over an empty graph renders a valid "0 nodes, 0 edges" document rather
+than raising an `EmptyTestViolation`. The guard is a property of a *rule* — a check that passes or
+fails — and a report is a rendering of data, so an empty graph is a legitimate subject for a report,
+not a defect. The module has no `ICheckable` and its terminals are not `Check()`.
+
+WHY: Issue 29 — the file-write boundary of `export as ...(path)` lives in the `GraphReport` surface
+itself (a private `Export` helper), not injected like the Files module's source-text provider:
+writing a file is the point of the export form, so forcing every report construction to carry a
+writer would buy nothing, whereas the Files provider exists so `adhere to` can run over a bare
+graph. The pure renderers never touch the filesystem — only the surface's `Export` does, wrapping a
+write failure in `TechnicalError` exactly as the composition root's `ReadSource` wraps a read
+failure.
+
 WHY: Issue 27 — the layers module's rule vocabulary is `may only depend on layers(...)` /
 `may not depend on layers(...)`, not the files module's `should` / `should not`: the issue names these
 verbs verbatim and they read as a sentence ("layer App may only depend on layers Models, Services")

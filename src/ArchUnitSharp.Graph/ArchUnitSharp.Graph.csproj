@@ -10,15 +10,12 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ArchUnitSharp.Tests" />
+    <InternalsVisibleTo Include="ArchUnitSharp.Graph.Tests" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\ArchUnitSharp.Common\ArchUnitSharp.Common.csproj" />
-    <ProjectReference Include="..\ArchUnitSharp.Extraction\ArchUnitSharp.Extraction.csproj" />
-    <ProjectReference Include="..\ArchUnitSharp.Files\ArchUnitSharp.Files.csproj" />
-    <ProjectReference Include="..\ArchUnitSharp.Graph\ArchUnitSharp.Graph.csproj" />
-    <ProjectReference Include="..\ArchUnitSharp.Layers\ArchUnitSharp.Layers.csproj" />
+    <ProjectReference Include="..\ArchUnitSharp.Projection\ArchUnitSharp.Projection.csproj" />
   </ItemGroup>
 
 </Project>
