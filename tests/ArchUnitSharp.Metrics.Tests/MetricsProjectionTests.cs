@@ -288,7 +288,7 @@ public class MetricsProjectionTests
         ClassInfo[] classInfos = classNames
             .Select(name => new ClassInfo(name, path, Array.Empty<MethodInfo>(), Array.Empty<FieldInfo>()))
             .ToArray();
-        return new FileInfo(path, 0, 0, 0, classInfos.Length, 0, classInfos);
+        return new FileInfo(path, 0, 0, 0, classInfos.Length, 0, classInfos.Length, 0, classInfos);
     }
 
     private static Graph Graph(params Edge[] edges) => new(edges);

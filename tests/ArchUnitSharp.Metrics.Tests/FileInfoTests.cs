@@ -12,6 +12,8 @@ public class FileInfoTests
             importCount: 2,
             classCount: 1,
             interfaceCount: 0,
+            typeCount: 1,
+            abstractTypeCount: 0,
             new[] { new ClassInfo("App.Car", "src/Models/Car.cs", Array.Empty<MethodInfo>(), Array.Empty<FieldInfo>()) });
 
         Assert.Equal("src/Models/Car.cs", info.Path);
@@ -20,7 +22,27 @@ public class FileInfoTests
         Assert.Equal(2, info.ImportCount);
         Assert.Equal(1, info.ClassCount);
         Assert.Equal(0, info.InterfaceCount);
+        Assert.Equal(1, info.TypeCount);
+        Assert.Equal(0, info.AbstractTypeCount);
         Assert.Equal(new[] { "App.Car" }, info.ClassInfos.Select(static classInfo => classInfo.Name));
+    }
+
+    [Fact]
+    public void The_type_counts_carry_the_abstract_subset()
+    {
+        var info = new FileInfo(
+            "src/Models/Car.cs",
+            1,
+            0,
+            0,
+            2,
+            1,
+            typeCount: 3,
+            abstractTypeCount: 2,
+            Array.Empty<ClassInfo>());
+
+        Assert.Equal(3, info.TypeCount);
+        Assert.Equal(2, info.AbstractTypeCount);
     }
 
     [Fact]
@@ -31,7 +53,7 @@ public class FileInfoTests
             new("App.Car", "src/Car.cs", Array.Empty<MethodInfo>(), Array.Empty<FieldInfo>()),
         };
 
-        var info = new FileInfo("src/Car.cs", 1, 0, 0, 1, 0, classInfos);
+        var info = new FileInfo("src/Car.cs", 1, 0, 0, 1, 0, 1, 0, classInfos);
 
         classInfos.Add(new ClassInfo("App.Truck", "src/Car.cs", Array.Empty<MethodInfo>(), Array.Empty<FieldInfo>()));
 
@@ -48,6 +70,8 @@ public class FileInfoTests
             0,
             1,
             0,
+            1,
+            0,
             new[] { new ClassInfo("App.Car", "src/Car.cs", Array.Empty<MethodInfo>(), Array.Empty<FieldInfo>()) });
 
         IReadOnlyList<ClassInfo> first = info.ClassInfos;
@@ -61,38 +85,62 @@ public class FileInfoTests
     public void The_constructor_rejects_a_null_path()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new FileInfo(null!, 1, 0, 0, 0, 0, Array.Empty<ClassInfo>()));
+            new FileInfo(null!, 1, 0, 0, 0, 0, 0, 0, Array.Empty<ClassInfo>()));
     }
 
     [Fact]
     public void The_constructor_rejects_an_empty_path()
     {
         Assert.Throws<ArgumentException>(() =>
-            new FileInfo(string.Empty, 1, 0, 0, 0, 0, Array.Empty<ClassInfo>()));
+            new FileInfo(string.Empty, 1, 0, 0, 0, 0, 0, 0, Array.Empty<ClassInfo>()));
     }
 
     [Fact]
     public void The_constructor_rejects_null_class_infos()
     {
         Assert.Throws<ArgumentNullException>(() =>
-            new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, null!));
+            new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, 0, 0, null!));
     }
 
     [Fact]
     public void Two_file_infos_with_the_same_facts_are_equal()
     {
-        var first = new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, Array.Empty<ClassInfo>());
-        var second = new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, Array.Empty<ClassInfo>());
+        var first = new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, 0, 0, Array.Empty<ClassInfo>());
+        var second = new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, 0, 0, Array.Empty<ClassInfo>());
 
         Assert.Equal(first, second);
         Assert.Equal(first.GetHashCode(), second.GetHashCode());
     }
 
     [Fact]
+    public void Two_file_infos_that_differ_in_abstract_types_are_not_equal()
+    {
+        var first = new FileInfo("src/Car.cs", 1, 0, 0, 2, 1, 3, 2, Array.Empty<ClassInfo>());
+        var second = new FileInfo("src/Car.cs", 1, 0, 0, 2, 1, 3, 1, Array.Empty<ClassInfo>());
+
+        Assert.NotEqual(first, second);
+        Assert.NotEqual(second, first);
+    }
+
+    [Fact]
+    public void The_constructor_rejects_a_negative_type_count()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, -1, 0, Array.Empty<ClassInfo>()));
+    }
+
+    [Fact]
+    public void The_constructor_rejects_abstract_types_above_the_type_count()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new FileInfo("src/Car.cs", 1, 0, 0, 0, 0, 2, 3, Array.Empty<ClassInfo>()));
+    }
+
+    [Fact]
     public void Two_file_infos_that_differ_in_one_fact_are_not_equal()
     {
-        var first = new FileInfo("src/Car.cs", 42, 5, 2, 1, 0, Array.Empty<ClassInfo>());
-        var second = new FileInfo("src/Car.cs", 43, 5, 2, 1, 0, Array.Empty<ClassInfo>());
+        var first = new FileInfo("src/Car.cs", 42, 5, 2, 1, 0, 1, 0, Array.Empty<ClassInfo>());
+        var second = new FileInfo("src/Car.cs", 43, 5, 2, 1, 0, 1, 0, Array.Empty<ClassInfo>());
 
         Assert.NotEqual(first, second);
         Assert.NotEqual(second, first);

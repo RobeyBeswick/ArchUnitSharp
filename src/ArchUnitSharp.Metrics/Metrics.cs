@@ -9,8 +9,8 @@ using ArchUnitSharp.Metrics.Projection;
 /// <see cref="Graph"/>. It is the ENTRY and SCOPE of a metric rule chain — built from the entry
 /// points <c>Project.ProjectMetrics()</c> / <c>Project.Metrics()</c>, narrowed by the file selectors
 /// <see cref="WithName"/>, <see cref="InFolder"/>, <see cref="InPath"/> and the class selector
-/// <see cref="ForClassesMatching"/>, and handed to the count section <see cref="Count"/> or the
-/// cohesion section <see cref="Lcom"/>.
+/// <see cref="ForClassesMatching"/>, and handed to the count section <see cref="Count"/>, the
+/// cohesion section <see cref="Lcom"/> or the distance section <see cref="Distance"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,8 +20,8 @@ using ArchUnitSharp.Metrics.Projection;
 /// keeps the files that declare at least one class whose fully qualified name matches, and is what a
 /// class-level metric's subjects and a file-level metric's in-scope files are drawn from. The
 /// PREDICATE and TERMINAL of a rule chain are the <see cref="CountMetrics"/> / <see cref="LcomMetrics"/>
-/// builder's and the metric selection's concern; <see cref="SelectFiles"/> evaluates the scope's file
-/// selection so a rule can consume it.
+/// / <see cref="DistanceMetrics"/> builder's and the metric selection's concern; <see cref="SelectFiles"/>
+/// evaluates the scope's file selection so a rule can consume it.
 /// </para>
 /// <para>
 /// Every selector returns a new <see cref="Metrics"/> instance and never mutates the one it was called
@@ -30,10 +30,10 @@ using ArchUnitSharp.Metrics.Projection;
 /// </para>
 /// <para>
 /// A scope also carries a source-text provider, the boundary through which a metric rule reads each
-/// selected file's content to extract its count and method-field access facts. The provider is wired
-/// by the composition root — the entry points build it from the located project — and a scope built
-/// from a bare <see cref="Graph"/> has no source to read, so a metric rule over it raises a
-/// <see cref="UserError"/> rather than fabricating empty text.
+/// selected file's content to extract its count, method-field access and type facts. The provider
+/// is wired by the composition root — the entry points build it from the located project — and a
+/// scope built from a bare <see cref="Graph"/> has no source to read, so a metric rule over it
+/// raises a <see cref="UserError"/> rather than fabricating empty text.
 /// </para>
 /// </remarks>
 public sealed class Metrics
@@ -152,6 +152,13 @@ public sealed class Metrics
     /// </summary>
     /// <returns>A new <see cref="LcomMetrics"/> over this scope.</returns>
     public LcomMetrics Lcom() => new(this);
+
+    /// <summary>
+    /// <c>distance</c>: the distance-metric section of a rule chain. Returns a new
+    /// <see cref="DistanceMetrics"/>; the current scope is unchanged.
+    /// </summary>
+    /// <returns>A new <see cref="DistanceMetrics"/> over this scope.</returns>
+    public DistanceMetrics Distance() => new(this);
 
     /// <summary>
     /// Evaluates the scope's file selection: the identifiers of the files this scope names, sorted

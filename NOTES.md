@@ -1,5 +1,27 @@
 # NOTES
 
+WHY: Issue 34 — the distance metrics are file-level and dependency-derived, so their couplings come
+from the project's graph while their abstractness comes from the source: the projection layer counts a
+file's distinct internal coupling partners over the whole project's edges (external and self edges
+excluded, parallel edges deduped) and pairs them with the file's extracted type facts. A file's types
+are its classes plus interfaces and its abstract types its interfaces plus abstract classes — the C#
+reading of the Ruby sibling's classes-plus-modules — and the file's abstractness is zero when it
+declares no types. The zone guards land as rule terminals, `not in zone of pain` / `not in zone of
+uselessness`, not comparisons: the sibling's `not_in_zone_of_pain` is a terminal too, and the strict
+0.3/0.7 boundaries are the calculation layer's fixed constants. `DistanceInfo` carries the file facts
+the calculations read directly (built from the extracted `FileInfo` by the projection) rather than
+wrapping the `FileInfo` like the sibling, so the count module's data types stay untouched apart from
+`FileInfo` gaining the two type counts the abstractness formula needs.
+
+WHY: Issue 34 — the normalised-distance size discount favours larger files (a file of at least a
+hundred lines is discounted by the full half, an empty file not at all), the opposite of the prose
+that originally shipped. The correctness reviewer offered both fixes; the tests — the three
+`Normalised_distance_*` calculation tests and the end-to-end
+`Normalised_distance_discounts_a_large_concrete_file_to_half` — uniformly pin the larger-files-
+discounted direction, so that is the intended semantics and the prose in
+`Calculation/DistanceMetrics.cs` and `DistanceMetricKind.cs` is corrected to say so, not the code
+inverted to match prose written backwards.
+
 WHY: Issue 33 — the LCOM family mirrors the ArchUnitRuby sibling's formulas exactly, including its
 shared mappings: LCOM96a / LCOM3 / LCOM5 / LCOM* are all the normalised method-field distance
 `(m − a/f)/(m − 1)` and LCOM96b / LCOM2 are both the method-field density complement `1 − a/(m·f)`,

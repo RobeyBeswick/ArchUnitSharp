@@ -7,14 +7,17 @@ using ArchUnitSharp.Metrics;
 using ArchUnitSharp.Metrics.Extraction;
 using ArchUnitSharp.Metrics.Projection;
 using CountMetricCalculation = ArchUnitSharp.Metrics.Calculation.CountMetrics;
+using DistanceCalculation = ArchUnitSharp.Metrics.Calculation.DistanceMetrics;
 using LcomCalculation = ArchUnitSharp.Metrics.Calculation.LcomMetrics;
 
 /// <summary>
 /// The metrics module's shared assertion: the one place a metric rule's outcome is computed. A rule is
 /// a <see cref="MetricRule"/> — the scope, the <see cref="Metric"/>, and either a
 /// <see cref="MetricComparison"/> plus threshold or a custom predicate plus message — or a
-/// <see cref="LcomMetricRule"/> over a <see cref="LcomMetric"/>, and every rule routes an empty subject
-/// set through the shared <see cref="EmptyTestGuard"/>.
+/// <see cref="LcomMetricRule"/> over a <see cref="LcomMetric"/>, a <see cref="DistanceMetricRule"/>
+/// over a <see cref="DistanceMetric"/>, or a <see cref="DistanceZoneRule"/> over a
+/// <see cref="DistanceZone"/>, and every rule routes an empty subject set through the shared
+/// <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -26,12 +29,15 @@ using LcomCalculation = ArchUnitSharp.Metrics.Calculation.LcomMetrics;
 /// <see cref="CheckOptions.AllowEmptyTests"/> is set.
 /// </para>
 /// <para>
-/// Each subject's value is computed by the calculation layer's <c>CountMetrics</c> or <c>LcomMetrics</c>
-/// and compared against the rule's threshold with the rule's comparison — or handed to the rule's
-/// predicate — and every subject that misses is reported as one <see cref="MetricViolation"/> or
-/// <see cref="LcomMetricViolation"/>, in subject order. A scope built without a source provider raises
-/// a <see cref="UserError"/> when it tries to read a selected file's text, the same boundary the files
-/// module's <c>adhere to</c> rules use.
+/// Each subject's value is computed by the calculation layer's <c>CountMetrics</c>,
+/// <c>LcomMetrics</c> or <c>DistanceMetrics</c> — a distance metric's couplings read from the graph
+/// by <see cref="DistanceProjection"/> — and compared against the rule's threshold with the rule's
+/// comparison, or handed to the rule's predicate, and every subject that misses is reported as one
+/// <see cref="MetricViolation"/>, <see cref="LcomMetricViolation"/> or
+/// <see cref="DistanceMetricViolation"/>, in subject order. A zone rule reports every file whose
+/// abstractness/instability point falls in its zone as one <see cref="DistanceZoneViolation"/>. A
+/// scope built without a source provider raises a <see cref="UserError"/> when it tries to read a
+/// selected file's text, the same boundary the files module's <c>adhere to</c> rules use.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
@@ -123,6 +129,63 @@ internal static class MetricsAssertion
         return rule.Predicate is not null
             ? CheckLcomPredicate(rule, subjects)
             : CheckLcomThreshold(rule, subjects);
+    }
+
+    /// <summary>
+    /// Checks a distance-metric rule and returns the violations it found. An empty list means the rule
+    /// passed. Every distance metric is a file-level metric, so the rule's subjects are the files the
+    /// scope's file and class selectors leave in scope, each measured with the couplings it has in the
+    /// whole project's graph.
+    /// </summary>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    public static IReadOnlyList<Violation> CheckDistance(DistanceMetricRule rule, CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        IReadOnlyList<DistanceInfo> subjects = DistanceSubjects(rule.Scope);
+        if (subjects.Count == 0)
+        {
+            return EmptyTestGuard.Guard(DescribeDistanceRule(rule), options);
+        }
+
+        return rule.Predicate is not null
+            ? CheckDistancePredicate(rule, subjects)
+            : CheckDistanceThreshold(rule, subjects);
+    }
+
+    /// <summary>
+    /// Checks a zone-guard rule and returns the violations it found. An empty list means the rule
+    /// passed. The rule's subjects are the files the scope's file and class selectors leave in scope,
+    /// and every subject whose abstractness/instability point falls in the rule's zone is reported as
+    /// one <see cref="DistanceZoneViolation"/>.
+    /// </summary>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    public static IReadOnlyList<Violation> CheckZone(DistanceZoneRule rule, CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        IReadOnlyList<DistanceInfo> subjects = DistanceSubjects(rule.Scope);
+        if (subjects.Count == 0)
+        {
+            return EmptyTestGuard.Guard(DescribeZoneRule(rule), options);
+        }
+
+        return subjects
+            .Where(info => DistanceCalculation.InZone(info, rule.Zone))
+            .Select(info => (Violation)new DistanceZoneViolation(
+                info.File,
+                rule.Zone,
+                DistanceCalculation.ValueOf(DistanceCalculation.Abstractness(), info),
+                DistanceCalculation.ValueOf(DistanceCalculation.Instability(), info)))
+            .ToArray();
     }
 
     private static IReadOnlyList<Violation> CheckThreshold(MetricRule rule, IReadOnlyList<ClassInfo> subjects)
@@ -219,6 +282,64 @@ internal static class MetricsAssertion
                 rule.Message!))
             .ToArray();
 
+    private static IReadOnlyList<Violation> CheckDistanceThreshold(
+        DistanceMetricRule rule,
+        IReadOnlyList<DistanceInfo> subjects)
+    {
+        MetricComparison comparison = rule.Comparison!.Value;
+        double threshold = rule.Threshold!.Value;
+
+        return subjects
+            .Select(info => (Info: info, Value: DistanceCalculation.ValueOf(rule.Metric, info)))
+            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
+            .Select(pair => (Violation)new DistanceMetricViolation(
+                pair.Info.File,
+                rule.Metric.Kind,
+                pair.Value,
+                comparison,
+                threshold))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<Violation> CheckDistancePredicate(
+        DistanceMetricRule rule,
+        IReadOnlyList<DistanceInfo> subjects) =>
+        subjects
+            .Select(info => (Info: info, Value: DistanceCalculation.ValueOf(rule.Metric, info)))
+            .Where(pair => !rule.Predicate!(pair.Value))
+            .Select(pair => (Violation)new DistanceMetricViolation(
+                pair.Info.File,
+                rule.Metric.Kind,
+                pair.Value,
+                rule.Message!))
+            .ToArray();
+
+    /// <summary>
+    /// A rule's file-level subjects as distance infos: the files the scope's file selectors name,
+    /// narrowed to the files that contain a matching class, each enriched with its couplings in the
+    /// whole project's graph.
+    /// </summary>
+    private static IReadOnlyList<DistanceInfo> DistanceSubjects(Metrics scope)
+    {
+        IReadOnlyList<string> selected = MetricsProjection.SelectFiles(scope.Graph, scope.FileFilters);
+        if (selected.Count == 0)
+        {
+            return Array.Empty<DistanceInfo>();
+        }
+
+        IReadOnlyList<FileInfo> files = selected
+            .Select(path => MetricsExtractor.Extract(path, scope.SourceText(path)))
+            .ToArray();
+
+        IReadOnlyList<FileInfo> subjects = MetricsProjection.SelectFileSubjects(files, scope.ClassFilters);
+        if (subjects.Count == 0)
+        {
+            return Array.Empty<DistanceInfo>();
+        }
+
+        return DistanceProjection.Build(subjects, scope.Graph);
+    }
+
     /// <summary>
     /// Whether a metric value satisfies a comparison against a threshold.
     /// </summary>
@@ -304,6 +425,43 @@ internal static class MetricsAssertion
     }
 
     /// <summary>
+    /// The whole distance rule, in the words a report would show: the scope, the metric, and the
+    /// required comparison and threshold or the required predicate's message.
+    /// </summary>
+    private static string DescribeDistanceRule(DistanceMetricRule rule)
+    {
+        var builder = new StringBuilder(rule.Scope.DescribeScope());
+        builder.Append(' ');
+        builder.Append(DistanceWords(rule.Metric.Kind));
+
+        if (rule.Predicate is not null)
+        {
+            builder.Append(" should satisfy '");
+            builder.Append(rule.Message);
+            builder.Append('\'');
+            return builder.ToString();
+        }
+
+        builder.Append(' ');
+        builder.Append(ComparisonWords(rule.Comparison!.Value));
+        builder.Append(' ');
+        builder.Append(rule.Threshold!.Value.ToString(CultureInfo.InvariantCulture));
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// The whole zone rule, in the words a report would show: the scope and the zone it guards
+    /// against.
+    /// </summary>
+    private static string DescribeZoneRule(DistanceZoneRule rule)
+    {
+        var builder = new StringBuilder(rule.Scope.DescribeScope());
+        builder.Append(' ');
+        builder.Append(ZoneWords(rule.Zone));
+        return builder.ToString();
+    }
+
+    /// <summary>
     /// The metric's own words for a report.
     /// </summary>
     private static string MetricWords(CountMetricKind kind) => kind switch
@@ -338,6 +496,36 @@ internal static class MetricsAssertion
             nameof(kind),
             kind,
             "Kind is not a defined LcomMetricKind value."),
+    };
+
+    /// <summary>
+    /// The distance metric's own words for a report.
+    /// </summary>
+    private static string DistanceWords(DistanceMetricKind kind) => kind switch
+    {
+        DistanceMetricKind.Abstractness => "abstractness",
+        DistanceMetricKind.Instability => "instability",
+        DistanceMetricKind.DistanceFromMainSequence => "distance from main sequence",
+        DistanceMetricKind.CouplingFactor => "coupling factor",
+        DistanceMetricKind.NormalisedDistance => "normalised distance",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(kind),
+            kind,
+            "Kind is not a defined DistanceMetricKind value."),
+    };
+
+    /// <summary>
+    /// The zone's own words for a report: <c>not in zone of pain</c> for
+    /// <see cref="DistanceZone.Pain"/>, and so on.
+    /// </summary>
+    private static string ZoneWords(DistanceZone zone) => zone switch
+    {
+        DistanceZone.Pain => "not in zone of pain",
+        DistanceZone.Uselessness => "not in zone of uselessness",
+        _ => throw new ArgumentOutOfRangeException(
+            nameof(zone),
+            zone,
+            "Zone is not a defined DistanceZone value."),
     };
 
     /// <summary>

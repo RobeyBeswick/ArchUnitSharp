@@ -193,6 +193,16 @@ public class MetricsTests
     }
 
     [Fact]
+    public void Distance_returns_a_distance_section_over_this_scope()
+    {
+        var metrics = new Metrics(Graph(Self("a.cs"))).InFolder("src");
+
+        DistanceMetrics distance = metrics.Distance();
+
+        Assert.Same(metrics, distance.Metrics);
+    }
+
+    [Fact]
     public void A_selector_leaves_the_class_selectors_unchanged()
     {
         var parent = new Metrics(Graph(Self("a.cs"))).ForClassesMatching("*.Controller");

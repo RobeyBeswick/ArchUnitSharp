@@ -27,7 +27,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// each count one, and the blocks that group them do not. <see cref="FileInfo.ImportCount"/> counts
 /// every <c>using</c> directive of the syntax tree. <see cref="FileInfo.ClassCount"/> and
 /// <see cref="FileInfo.InterfaceCount"/> count the file's <c>class</c> and <c>interface</c>
-/// declarations, and <see cref="FileInfo.ClassInfos"/> carries a <see cref="ClassInfo"/> per class.
+/// declarations, <see cref="FileInfo.TypeCount"/> the two together, and
+/// <see cref="FileInfo.AbstractTypeCount"/> the abstract subset — interfaces plus <c>abstract</c>
+/// classes — and <see cref="FileInfo.ClassInfos"/> carries a <see cref="ClassInfo"/> per class.
 /// Each class's <see cref="MethodInfo"/> and <see cref="FieldInfo"/> carry the method-field access
 /// facts the cohesion metrics are computed from.
 /// </para>
@@ -39,7 +41,8 @@ internal static class MetricsExtractor
 {
     /// <summary>
     /// Parses <paramref name="sourceText"/> and returns the file's extracted info: the non-blank line
-    /// count, statement count, import count, class count, interface count and per-class info.
+    /// count, statement count, import count, class count, interface count, type and abstract-type
+    /// counts and per-class info.
     /// </summary>
     /// <param name="path">The file's graph identifier. Must not be <see langword="null"/> or empty.</param>
     /// <param name="sourceText">The file's full source text. Must not be <see langword="null"/>.</param>
@@ -61,6 +64,8 @@ internal static class MetricsExtractor
             .OrderBy(static info => info.Identifier, StringComparer.Ordinal)
             .ToArray();
 
+        int interfaceCount = root.DescendantNodes().OfType<InterfaceDeclarationSyntax>().Count();
+
         return new FileInfo(
             path,
             NonBlankLineCount(sourceText),
@@ -69,9 +74,22 @@ internal static class MetricsExtractor
                 .Count(static statement => statement is not BlockSyntax),
             root.DescendantNodes().OfType<UsingDirectiveSyntax>().Count(),
             classInfos.Length,
-            root.DescendantNodes().OfType<InterfaceDeclarationSyntax>().Count(),
+            interfaceCount,
+            classInfos.Length + interfaceCount,
+            interfaceCount + AbstractClassCount(root),
             classInfos);
     }
+
+    /// <summary>
+    /// Counts the file's abstract <c>class</c> declarations: the <c>class</c> declarations whose
+    /// modifiers carry the <c>abstract</c> keyword. Interfaces count as abstract types without being
+    /// classes, so they are added separately by the caller.
+    /// </summary>
+    private static int AbstractClassCount(CompilationUnitSyntax root) =>
+        root.DescendantNodes()
+            .OfType<ClassDeclarationSyntax>()
+            .Count(static declaration => declaration.Modifiers.Any(
+                static modifier => modifier.RawKind == (int)SyntaxKind.AbstractKeyword));
 
     /// <summary>
     /// Counts the lines of a source text that are not blank or whitespace only. Windows line endings

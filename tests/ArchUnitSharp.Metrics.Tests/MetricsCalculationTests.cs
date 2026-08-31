@@ -137,7 +137,7 @@ public class MetricsCalculationTests
     }
 
     private static FileInfo File(int lines, int statements, int imports, int classes, int interfaces) =>
-        new("src/App/Program.cs", lines, statements, imports, classes, interfaces, Array.Empty<ClassInfo>());
+        new("src/App/Program.cs", lines, statements, imports, classes, interfaces, classes + interfaces, interfaces, Array.Empty<ClassInfo>());
 
     private static ClassInfo Class(int methods, int fields)
     {

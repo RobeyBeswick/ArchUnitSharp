@@ -34,6 +34,40 @@ public class MetricsExtractorTests
         Assert.Equal(1, info.ImportCount);
         Assert.Equal(1, info.ClassCount);
         Assert.Equal(0, info.InterfaceCount);
+        Assert.Equal(1, info.TypeCount);
+        Assert.Equal(0, info.AbstractTypeCount);
+    }
+
+    [Fact]
+    public void Extract_counts_types_and_abstract_types()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public abstract class Base { }\n" +
+            "public class Car { }\n" +
+            "public interface IThing { }\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+
+        Assert.Equal(2, info.ClassCount);
+        Assert.Equal(1, info.InterfaceCount);
+        Assert.Equal(3, info.TypeCount);
+        Assert.Equal(2, info.AbstractTypeCount);
+    }
+
+    [Fact]
+    public void Extract_counts_an_abstract_record_as_a_class_not_a_abstract_type()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public abstract record Base;\n" +
+            "public record Point(int X);\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Models.cs", source);
+
+        Assert.Equal(0, info.ClassCount);
+        Assert.Equal(0, info.TypeCount);
+        Assert.Equal(0, info.AbstractTypeCount);
     }
 
     [Fact]
@@ -364,6 +398,8 @@ public class MetricsExtractorTests
         Assert.Equal(0, info.ImportCount);
         Assert.Equal(0, info.ClassCount);
         Assert.Equal(0, info.InterfaceCount);
+        Assert.Equal(0, info.TypeCount);
+        Assert.Equal(0, info.AbstractTypeCount);
         Assert.Empty(info.ClassInfos);
     }
 
