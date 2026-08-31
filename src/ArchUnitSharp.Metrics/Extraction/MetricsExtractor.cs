@@ -7,9 +7,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 /// <summary>
 /// The metrics module's extraction boundary: parses one file's source text and produces the
-/// <see cref="FileInfo"/> the count metrics measure. It is the module's only Roslyn contact — the
-/// calculation, projection and assertion layers are pure and never parse — and it is the only place
-/// a source file's text becomes count facts.
+/// <see cref="FileInfo"/> the count and cohesion metrics measure. It is the module's only Roslyn
+/// contact — the calculation, projection and assertion layers are pure and never parse — and it is
+/// the only place a source file's text becomes count facts and method-field access facts.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -28,6 +28,8 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// every <c>using</c> directive of the syntax tree. <see cref="FileInfo.ClassCount"/> and
 /// <see cref="FileInfo.InterfaceCount"/> count the file's <c>class</c> and <c>interface</c>
 /// declarations, and <see cref="FileInfo.ClassInfos"/> carries a <see cref="ClassInfo"/> per class.
+/// Each class's <see cref="MethodInfo"/> and <see cref="FieldInfo"/> carry the method-field access
+/// facts the cohesion metrics are computed from.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use.

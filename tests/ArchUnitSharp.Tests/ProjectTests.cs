@@ -810,6 +810,65 @@ public class ProjectTests
     }
 
     [Fact]
+    public void ProjectMetrics_checks_an_lcom_metric_rule()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile(
+            "src/App/Split.cs",
+            "namespace App;\n" +
+            "public class Split\n" +
+            "{\n" +
+            "    private int _a;\n" +
+            "    private int _b;\n" +
+            "    public void A() { _a = 1; }\n" +
+            "    public void B() { _b = 2; }\n" +
+            "}\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .Lcom()
+            .Lcom4()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new LcomMetricViolation(
+                    "src/App/Split.cs",
+                    "App.Split",
+                    LcomMetricKind.Lcom4,
+                    value: 2.0,
+                    MetricComparison.Equal,
+                    threshold: 1.0),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectMetrics_guards_an_lcom_rule_that_matches_nothing()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .WithName("Car.cs")
+            .Lcom()
+            .Lcom4()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project metrics with name 'Car.cs' lcom4 should be 1") },
+            violations);
+    }
+
+    [Fact]
     public void Metrics_alias_returns_a_scope_like_project_metrics()
     {
         using var project = new TempProject();

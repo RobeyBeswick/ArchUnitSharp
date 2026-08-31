@@ -8,11 +8,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 /// <summary>
 /// The syntax walk that extracts the <see cref="ClassInfo"/> values of one C# file: one info per
-/// <c>class</c> declaration, nested declarations included, each carrying its fully qualified name and
-/// its direct <c>method</c> and field declarations. It is the class half of the metrics extraction;
-/// the file-level counts (<c>lines of code</c>, <c>statements</c>, <c>imports</c> and
-/// <c>interfaces</c>) are computed by <see cref="MetricsExtractor"/> from the same syntax tree the
-/// visitor walks.
+/// <c>class</c> declaration, nested declarations included, each carrying its fully qualified name, its
+/// direct <c>method</c> and field declarations, and — for each method, the fields it accesses, and for
+/// each field, the methods that access it. It is the class half of the metrics extraction; the
+/// file-level counts (<c>lines of code</c>, <c>statements</c>, <c>imports</c> and <c>interfaces</c>)
+/// are computed by <see cref="MetricsExtractor"/> from the same syntax tree the visitor walks.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,7 +20,10 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 /// record, struct or interface is visited and becomes its own <see cref="ClassInfo"/> — its methods
 /// and fields are its own, not its enclosing type's. A class's methods are its direct
 /// <c>method</c> declarations (constructors, destructors, operators and accessors are not methods)
-/// and its fields are one per variable its field declarations name. Each info's <see cref="ClassInfo.Name"/>
+/// and its fields are one per variable its field declarations name. A method's accessed fields are
+/// the class's field names that appear among the identifiers of the method's body or expression body;
+/// a field's accessing methods are the methods whose accessed fields include it, so the two facts are
+/// the same relationship read in either direction. Each info's <see cref="ClassInfo.Name"/>
 /// is the class's fully qualified name with dots: the namespace and every enclosing type joined to the
 /// class's own name.
 /// </para>
@@ -65,26 +68,76 @@ internal sealed class SourceMetricsVisitor : CSharpSyntaxVisitor
     /// <inheritdoc/>
     public override void VisitClassDeclaration(ClassDeclarationSyntax node)
     {
+        IReadOnlyList<MethodInfo> methods = MethodsOf(node);
         _classInfos.Add(new ClassInfo(
             QualifiedNameOf(node),
             _filePath,
-            MethodsOf(node),
-            FieldsOf(node)));
+            methods,
+            FieldsOf(node, methods)));
         base.VisitClassDeclaration(node);
     }
 
-    private static IReadOnlyList<MethodInfo> MethodsOf(ClassDeclarationSyntax node) =>
-        node.Members
+    private static IReadOnlyList<MethodInfo> MethodsOf(ClassDeclarationSyntax node)
+    {
+        HashSet<string> fieldNames = FieldNamesOf(node);
+        return node.Members
             .OfType<MethodDeclarationSyntax>()
-            .Select(static member => new MethodInfo(member.Identifier.Text))
+            .Select(member => new MethodInfo(
+                member.Identifier.Text,
+                AccessedFieldsOf(member, fieldNames)))
             .OrderBy(static method => method.Name, StringComparer.Ordinal)
             .ToArray();
+    }
 
-    private static IReadOnlyList<FieldInfo> FieldsOf(ClassDeclarationSyntax node) =>
+    private static HashSet<string> FieldNamesOf(ClassDeclarationSyntax node) =>
+        new(
+            node.Members
+                .OfType<FieldDeclarationSyntax>()
+                .SelectMany(static member => member.Declaration.Variables)
+                .Select(static variable => variable.Identifier.Text),
+            StringComparer.Ordinal);
+
+    /// <summary>
+    /// The fields of a method's class that the method accesses: the class's field names that appear
+    /// among the identifiers of the method's body or expression body, each once — the
+    /// <see cref="MethodInfo"/> constructor sorts and deduplicates. An identifier that merely shares a
+    /// field's name — a local variable, parameter or another object's member — is counted, the
+    /// deliberate approximation of a textual match.
+    /// </summary>
+    private static IReadOnlyList<string> AccessedFieldsOf(
+        MethodDeclarationSyntax method,
+        HashSet<string> fieldNames)
+    {
+        IEnumerable<string> identifiers = method.Body is not null
+            ? method.Body.DescendantNodes()
+                .OfType<IdentifierNameSyntax>()
+                .Select(static identifier => identifier.Identifier.Text)
+            : Array.Empty<string>();
+        if (method.ExpressionBody is not null)
+        {
+            identifiers = identifiers.Concat(
+                method.ExpressionBody.DescendantNodes()
+                    .OfType<IdentifierNameSyntax>()
+                    .Select(static identifier => identifier.Identifier.Text));
+        }
+
+        return identifiers
+            .Where(fieldNames.Contains)
+            .ToArray();
+    }
+
+    private static IReadOnlyList<FieldInfo> FieldsOf(
+        ClassDeclarationSyntax node,
+        IReadOnlyList<MethodInfo> methods) =>
         node.Members
             .OfType<FieldDeclarationSyntax>()
             .SelectMany(static member => member.Declaration.Variables)
-            .Select(static variable => new FieldInfo(variable.Identifier.Text))
+            .Select(variable => new FieldInfo(
+                variable.Identifier.Text,
+                methods
+                    .Where(method => method.AccessedFields.Contains(variable.Identifier.Text, StringComparer.Ordinal))
+                    .Select(static method => method.Name)
+                    .ToArray()))
             .OrderBy(static field => field.Name, StringComparer.Ordinal)
             .ToArray();
 

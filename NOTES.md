@@ -1,5 +1,22 @@
 # NOTES
 
+WHY: Issue 33 — the LCOM family mirrors the ArchUnitRuby sibling's formulas exactly, including its
+shared mappings: LCOM96a / LCOM3 / LCOM5 / LCOM* are all the normalised method-field distance
+`(m − a/f)/(m − 1)` and LCOM96b / LCOM2 are both the method-field density complement `1 − a/(m·f)`,
+while LCOM1 is `max(P − Q, 0)` and LCOM4 counts connected components. The issue names the metrics but
+not their formulas; the sibling is the authority these issues build against, so the aliases ship as
+shared formulas rather than invented distinct ones, each documented in the calculation layer. All
+values are `double` (the LCOM thresholds are doubles), so LCOM1/LCOM4 surface whole numbers as e.g.
+`2.0`.
+
+WHY: Issue 33 — field access is a textual identifier match: a method accesses the fields of its class
+whose names appear among the identifiers of its body or expression body (`_speed = 0` and
+`this._speed` both match). An identifier that merely shares a field's name — a local variable, a
+parameter, or another object's member (`other._speed`) — is counted, which is the deliberate
+approximation of a textual match the Ruby sibling avoids because its instance variables are always
+`@`-prefixed. Accessors and constructors are not methods in the module's existing definition, so
+their field accesses are not recorded, consistent with the count metrics' method definition.
+
 WHY: Issue 32 — the count-metric surface ships seven metrics, not the eight the issue lists: the
 siblings' file-level `functions` metric is omitted because C# has no file-level function concept
 distinct from a type member — every method belongs to a class — and the issue's rule is to skip a

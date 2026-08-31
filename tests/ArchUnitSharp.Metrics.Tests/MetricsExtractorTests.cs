@@ -210,6 +210,151 @@ public class MetricsExtractorTests
     }
 
     [Fact]
+    public void Extract_records_the_fields_each_method_accesses()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    private int _gear;\n" +
+            "    public void Drive() { _speed = 1; _gear = 2; }\n" +
+            "    public void Stop() { _speed = 0; }\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Equal(
+            new[] { "_gear", "_speed" },
+            car.Methods.Single(method => method.Name == "Drive").AccessedFields);
+        Assert.Equal(
+            new[] { "_speed" },
+            car.Methods.Single(method => method.Name == "Stop").AccessedFields);
+    }
+
+    [Fact]
+    public void Extract_records_the_methods_that_access_each_field()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    private int _gear;\n" +
+            "    public void Drive() { _speed = 1; _gear = 2; }\n" +
+            "    public void Stop() { _speed = 0; }\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Equal(
+            new[] { "Drive", "Stop" },
+            car.Fields.Single(field => field.Name == "_speed").AccessedBy);
+        Assert.Equal(
+            new[] { "Drive" },
+            car.Fields.Single(field => field.Name == "_gear").AccessedBy);
+    }
+
+    [Fact]
+    public void Extract_does_not_count_locals_or_other_identifiers_as_field_accesses()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    public void Drive() { int count = _speed; }\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Equal(
+            new[] { "_speed" },
+            car.Methods.Single(method => method.Name == "Drive").AccessedFields);
+    }
+
+    [Fact]
+    public void Extract_counts_a_field_referenced_through_this_and_expression_bodies()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    public int Get() => this._speed;\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Equal(
+            new[] { "_speed" },
+            car.Methods.Single(method => method.Name == "Get").AccessedFields);
+    }
+
+    [Fact]
+    public void Extract_does_not_scan_constructors_or_accessors_for_field_accesses()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    public Car() { _speed = 1; }\n" +
+            "    public int Speed { get => _speed; set => _speed = value; }\n" +
+            "    public void Drive() { _speed = 2; }\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        MethodInfo drive = Assert.Single(car.Methods);
+        Assert.Equal("Drive", drive.Name);
+        Assert.Equal(new[] { "_speed" }, drive.AccessedFields);
+        Assert.Equal(
+            new[] { "Drive" },
+            car.Fields.Single(field => field.Name == "_speed").AccessedBy);
+    }
+
+    [Fact]
+    public void Extract_leaves_a_field_no_method_accesses_with_an_empty_list()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    private int _unused;\n" +
+            "    public void Drive() { _speed = 1; }\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Empty(car.Fields.Single(field => field.Name == "_unused").AccessedBy);
+    }
+
+    [Fact]
+    public void Extract_does_not_count_the_methods_own_name_as_a_field_access()
+    {
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    private int _speed;\n" +
+            "    public int _speed() => 1;\n" +
+            "}\n";
+
+        FileInfo info = MetricsExtractor.Extract("src/Car.cs", source);
+        ClassInfo car = Assert.Single(info.ClassInfos);
+
+        Assert.Empty(Assert.Single(car.Methods).AccessedFields);
+    }
+
+    [Fact]
     public void Extract_handles_an_empty_source()
     {
         FileInfo info = MetricsExtractor.Extract("src/Empty.cs", string.Empty);

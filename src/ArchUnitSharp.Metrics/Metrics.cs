@@ -6,10 +6,11 @@ using ArchUnitSharp.Metrics.Projection;
 
 /// <summary>
 /// The metrics domain module's fluent surface: a scoped set of files and classes over one project's
-/// <see cref="Graph"/>. It is the ENTRY and SCOPE of a count-metric rule chain — built from the entry
+/// <see cref="Graph"/>. It is the ENTRY and SCOPE of a metric rule chain — built from the entry
 /// points <c>Project.ProjectMetrics()</c> / <c>Project.Metrics()</c>, narrowed by the file selectors
 /// <see cref="WithName"/>, <see cref="InFolder"/>, <see cref="InPath"/> and the class selector
-/// <see cref="ForClassesMatching"/>, and handed to the count section <see cref="Count"/>.
+/// <see cref="ForClassesMatching"/>, and handed to the count section <see cref="Count"/> or the
+/// cohesion section <see cref="Lcom"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -17,10 +18,10 @@ using ArchUnitSharp.Metrics.Projection;
 /// has been applied, otherwise exactly the files that match every file selector applied so far —
 /// selectors combine with AND. <see cref="ForClassesMatching"/> narrows by class rather than file: it
 /// keeps the files that declare at least one class whose fully qualified name matches, and is what a
-/// class-level metric's subjects and a file-level metric's in-scope files are drawn from. The COUNT
-/// and TERMINAL of a rule chain are the <see cref="CountMetrics"/> builder's and the metric
-/// selection's concern; <see cref="SelectFiles"/> evaluates the scope's file selection so a rule can
-/// consume it.
+/// class-level metric's subjects and a file-level metric's in-scope files are drawn from. The
+/// PREDICATE and TERMINAL of a rule chain are the <see cref="CountMetrics"/> / <see cref="LcomMetrics"/>
+/// builder's and the metric selection's concern; <see cref="SelectFiles"/> evaluates the scope's file
+/// selection so a rule can consume it.
 /// </para>
 /// <para>
 /// Every selector returns a new <see cref="Metrics"/> instance and never mutates the one it was called
@@ -29,10 +30,10 @@ using ArchUnitSharp.Metrics.Projection;
 /// </para>
 /// <para>
 /// A scope also carries a source-text provider, the boundary through which a metric rule reads each
-/// selected file's content to extract its counts. The provider is wired by the composition root — the
-/// entry points build it from the located project — and a scope built from a bare <see cref="Graph"/>
-/// has no source to read, so a metric rule over it raises a <see cref="UserError"/> rather than
-/// fabricating empty text.
+/// selected file's content to extract its count and method-field access facts. The provider is wired
+/// by the composition root — the entry points build it from the located project — and a scope built
+/// from a bare <see cref="Graph"/> has no source to read, so a metric rule over it raises a
+/// <see cref="UserError"/> rather than fabricating empty text.
 /// </para>
 /// </remarks>
 public sealed class Metrics
@@ -144,6 +145,13 @@ public sealed class Metrics
     /// </summary>
     /// <returns>A new <see cref="CountMetrics"/> over this scope.</returns>
     public CountMetrics Count() => new(this);
+
+    /// <summary>
+    /// <c>lcom</c>: the cohesion-metric section of a rule chain. Returns a new <see cref="LcomMetrics"/>;
+    /// the current scope is unchanged.
+    /// </summary>
+    /// <returns>A new <see cref="LcomMetrics"/> over this scope.</returns>
+    public LcomMetrics Lcom() => new(this);
 
     /// <summary>
     /// Evaluates the scope's file selection: the identifiers of the files this scope names, sorted

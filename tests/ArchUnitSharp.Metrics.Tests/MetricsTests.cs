@@ -183,6 +183,16 @@ public class MetricsTests
     }
 
     [Fact]
+    public void Lcom_returns_a_lcom_section_over_this_scope()
+    {
+        var metrics = new Metrics(Graph(Self("a.cs"))).InFolder("src");
+
+        LcomMetrics lcom = metrics.Lcom();
+
+        Assert.Same(metrics, lcom.Metrics);
+    }
+
+    [Fact]
     public void A_selector_leaves_the_class_selectors_unchanged()
     {
         var parent = new Metrics(Graph(Self("a.cs"))).ForClassesMatching("*.Controller");
