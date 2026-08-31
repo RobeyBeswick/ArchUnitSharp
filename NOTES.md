@@ -1,5 +1,12 @@
 # NOTES
 
+WHY: Issue 35 — `custom metric(name, description, fn)` lands on the scope (`Metrics.CustomMetric`),
+not the count section, matching the sibling's scope-level `custom_metric`, and the custom value is an
+`int`, the count-metric vocabulary, where the sibling's is any Numeric. The `should satisfy(fn)`
+predicate taking `(value, classInfo)` is added only to the custom-metric selection, exactly what the
+issue names; the built-in count selection's `should satisfy` keeps its value-only predicate, so a
+caller who wants a `ClassInfo` predicate uses a custom metric.
+
 WHY: Issue 34 — the distance metrics are file-level and dependency-derived, so their couplings come
 from the project's graph while their abstractness comes from the source: the projection layer counts a
 file's distinct internal coupling partners over the whole project's edges (external and self edges

@@ -4,8 +4,9 @@ namespace ArchUnitSharp.Metrics;
 /// Static information about one class declaration of an extracted file: its fully qualified name, the
 /// file it is declared in, and its methods and fields — each method carrying the fields it accesses
 /// and each field the methods that access it. The class-level count metrics — <c>method count</c> and
-/// <c>field count</c> — and the LCOM cohesion metrics measure these; the <c>for classes matching</c>
-/// selector narrows a rule's subjects to the classes whose <see cref="Name"/> matches.
+/// <c>field count</c> — and the LCOM cohesion metrics measure these, and a custom metric's calculation
+/// receives the whole info; the <c>for classes matching</c> selector narrows a rule's subjects to the
+/// classes whose <see cref="Name"/> matches.
 /// </summary>
 /// <remarks>
 /// <para>

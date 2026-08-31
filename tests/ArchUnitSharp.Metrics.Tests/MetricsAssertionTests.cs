@@ -465,7 +465,8 @@ public class MetricsAssertionTests
     [Fact]
     public void Check_rejects_a_null_rule()
     {
-        Assert.Throws<ArgumentNullException>(() => MetricsAssertion.Check(null!, options: null));
+        Assert.Throws<ArgumentNullException>(() =>
+            MetricsAssertion.Check((MetricRule)null!, options: null));
     }
 
     private static Metrics Project(params (string Path, string Source)[] files)

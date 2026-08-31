@@ -10,7 +10,8 @@ using ArchUnitSharp.Metrics.Projection;
 /// points <c>Project.ProjectMetrics()</c> / <c>Project.Metrics()</c>, narrowed by the file selectors
 /// <see cref="WithName"/>, <see cref="InFolder"/>, <see cref="InPath"/> and the class selector
 /// <see cref="ForClassesMatching"/>, and handed to the count section <see cref="Count"/>, the
-/// cohesion section <see cref="Lcom"/> or the distance section <see cref="Distance"/>.
+/// cohesion section <see cref="Lcom"/>, the distance section <see cref="Distance"/> or the custom
+/// section <see cref="CustomMetric"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -20,8 +21,9 @@ using ArchUnitSharp.Metrics.Projection;
 /// keeps the files that declare at least one class whose fully qualified name matches, and is what a
 /// class-level metric's subjects and a file-level metric's in-scope files are drawn from. The
 /// PREDICATE and TERMINAL of a rule chain are the <see cref="CountMetrics"/> / <see cref="LcomMetrics"/>
-/// / <see cref="DistanceMetrics"/> builder's and the metric selection's concern; <see cref="SelectFiles"/>
-/// evaluates the scope's file selection so a rule can consume it.
+/// / <see cref="DistanceMetrics"/> builder's and the metric selection's concern — a custom metric's
+/// is <see cref="CustomMetricSelection"/>'s; <see cref="SelectFiles"/> evaluates the scope's file
+/// selection so a rule can consume it.
 /// </para>
 /// <para>
 /// Every selector returns a new <see cref="Metrics"/> instance and never mutates the one it was called
@@ -159,6 +161,20 @@ public sealed class Metrics
     /// </summary>
     /// <returns>A new <see cref="DistanceMetrics"/> over this scope.</returns>
     public DistanceMetrics Distance() => new(this);
+
+    /// <summary>
+    /// <c>custom metric</c>: the metrics module's escape hatch — a rule over a caller-named metric
+    /// whose value the caller's own calculation computes from one class's full information. Returns a
+    /// new <see cref="CustomMetricSelection"/>; the current scope is unchanged.
+    /// </summary>
+    /// <param name="name">The metric's name, as a report shows it; must not be <see langword="null"/> or empty.</param>
+    /// <param name="description">The metric's description, the rule's intent in the caller's own words; must not be <see langword="null"/> or empty.</param>
+    /// <param name="calculation">The calculation that turns one extracted <see cref="ClassInfo"/> into the metric's value; must not be <see langword="null"/>.</param>
+    /// <returns>A new <see cref="CustomMetricSelection"/> over this scope.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="name"/>, <paramref name="description"/> or <paramref name="calculation"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="name"/> or <paramref name="description"/> is empty.</exception>
+    public CustomMetricSelection CustomMetric(string name, string description, Func<ClassInfo, int> calculation) =>
+        new(this, new CustomMetric(name, description, calculation));
 
     /// <summary>
     /// Evaluates the scope's file selection: the identifiers of the files this scope names, sorted

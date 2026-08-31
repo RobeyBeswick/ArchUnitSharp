@@ -203,6 +203,66 @@ public class MetricsTests
     }
 
     [Fact]
+    public void CustomMetric_returns_a_custom_selection_over_this_scope()
+    {
+        var metrics = new Metrics(Graph(Self("a.cs"))).InFolder("src");
+
+        CustomMetricSelection custom = metrics.CustomMetric("member count", "d", static _ => 0);
+
+        Assert.Same(metrics, custom.Metrics);
+        Assert.Equal("member count", custom.Metric.Name);
+        Assert.Equal("d", custom.Metric.Description);
+    }
+
+    [Fact]
+    public void CustomMetric_rejects_a_null_name()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Metrics(Graph(Self("a.cs"))).CustomMetric(null!, "d", static _ => 0));
+    }
+
+    [Fact]
+    public void CustomMetric_rejects_an_empty_name()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Metrics(Graph(Self("a.cs"))).CustomMetric(string.Empty, "d", static _ => 0));
+    }
+
+    [Fact]
+    public void CustomMetric_rejects_a_null_description()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Metrics(Graph(Self("a.cs"))).CustomMetric("member count", null!, static _ => 0));
+    }
+
+    [Fact]
+    public void CustomMetric_rejects_an_empty_description()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Metrics(Graph(Self("a.cs"))).CustomMetric("member count", string.Empty, static _ => 0));
+    }
+
+    [Fact]
+    public void CustomMetric_rejects_a_null_calculation()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Metrics(Graph(Self("a.cs"))).CustomMetric("member count", "d", null!));
+    }
+
+    [Fact]
+    public void A_selector_keeps_the_custom_metric_of_a_branch()
+    {
+        var parent = new Metrics(Graph(Self("a.cs"))).ForClassesMatching("*.Controller");
+
+        var named = parent.WithName("Car.cs");
+        var custom = named.CustomMetric("member count", "d", static _ => 0);
+
+        Assert.Equal(
+            "project metrics with name 'Car.cs' for classes matching '*.Controller'",
+            custom.Metrics.DescribeScope());
+    }
+
+    [Fact]
     public void A_selector_leaves_the_class_selectors_unchanged()
     {
         var parent = new Metrics(Graph(Self("a.cs"))).ForClassesMatching("*.Controller");

@@ -10,7 +10,7 @@ using ArchUnitSharp.Extraction;
 /// <c>layers</c>) does the same for the layers module; <c>project slices</c> (alias <c>slices</c>) does
 /// the same for the slices module; <c>project graph</c> (alias <c>graph</c>) does the same for the
 /// graph module's reports; <c>project metrics</c> (alias <c>metrics</c>) does the same for the metrics
-/// module's count, cohesion and distance metrics.
+/// module's count, cohesion, distance and custom metrics.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -180,15 +180,16 @@ public static class Project
     public static ArchUnitSharp.Slices.Slices Slices(ProjectLocation location) => ProjectSlices(location);
 
     /// <summary>
-    /// <c>project metrics</c>: a count-, cohesion- and distance-metrics scope over the project located from the
-    /// current working directory.
+    /// <c>project metrics</c>: a count-, cohesion-, distance- and custom-metrics scope over the project
+    /// located from the current working directory.
     /// </summary>
     /// <returns>A metrics scope over the located project.</returns>
     /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
     public static ArchUnitSharp.Metrics.Metrics ProjectMetrics() => ProjectMetrics(ProjectLocator.Locate());
 
     /// <summary>
-    /// <c>project metrics</c>: a count-, cohesion- and distance-metrics scope over exactly the given project.
+    /// <c>project metrics</c>: a count-, cohesion-, distance- and custom-metrics scope over exactly the
+    /// given project.
     /// </summary>
     /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
     /// <returns>A metrics scope over the located project.</returns>
@@ -198,16 +199,16 @@ public static class Project
         new ArchUnitSharp.Metrics.Metrics(GraphCache.Get(location), identifier => ReadSource(location, identifier));
 
     /// <summary>
-    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-, cohesion- and distance-metrics scope over
-    /// the project located from the current working directory.
+    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-, cohesion-, distance- and
+    /// custom-metrics scope over the project located from the current working directory.
     /// </summary>
     /// <returns>A metrics scope over the located project.</returns>
     /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
     public static ArchUnitSharp.Metrics.Metrics Metrics() => ProjectMetrics();
 
     /// <summary>
-    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-, cohesion- and distance-metrics scope over
-    /// exactly the given project.
+    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-, cohesion-, distance- and
+    /// custom-metrics scope over exactly the given project.
     /// </summary>
     /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
     /// <returns>A metrics scope over the located project.</returns>

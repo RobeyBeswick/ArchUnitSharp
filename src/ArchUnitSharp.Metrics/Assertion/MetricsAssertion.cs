@@ -15,9 +15,9 @@ using LcomCalculation = ArchUnitSharp.Metrics.Calculation.LcomMetrics;
 /// a <see cref="MetricRule"/> — the scope, the <see cref="Metric"/>, and either a
 /// <see cref="MetricComparison"/> plus threshold or a custom predicate plus message — or a
 /// <see cref="LcomMetricRule"/> over a <see cref="LcomMetric"/>, a <see cref="DistanceMetricRule"/>
-/// over a <see cref="DistanceMetric"/>, or a <see cref="DistanceZoneRule"/> over a
-/// <see cref="DistanceZone"/>, and every rule routes an empty subject set through the shared
-/// <see cref="EmptyTestGuard"/>.
+/// over a <see cref="DistanceMetric"/>, a <see cref="DistanceZoneRule"/> over a
+/// <see cref="DistanceZone"/>, or a <see cref="CustomMetricRule"/> over a <see cref="CustomMetric"/>,
+/// and every rule routes an empty subject set through the shared <see cref="EmptyTestGuard"/>.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -92,6 +92,43 @@ internal static class MetricsAssertion
         return rule.Predicate is not null
             ? CheckPredicate(rule, fileSubjects)
             : CheckThreshold(rule, fileSubjects);
+    }
+
+    /// <summary>
+    /// Checks a custom-metric rule and returns the violations it found. An empty list means the rule
+    /// passed. Every custom metric is a class-level metric, so the rule's subjects are the classes the
+    /// scope's file and class selectors leave in scope, each measured by the metric's own calculation.
+    /// </summary>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    public static IReadOnlyList<Violation> Check(CustomMetricRule rule, CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(rule);
+
+        Metrics scope = rule.Scope;
+        IReadOnlyList<string> selected = MetricsProjection.SelectFiles(scope.Graph, scope.FileFilters);
+
+        if (selected.Count == 0)
+        {
+            return EmptyTestGuard.Guard(DescribeCustomRule(rule), options);
+        }
+
+        IReadOnlyList<FileInfo> files = selected
+            .Select(path => MetricsExtractor.Extract(path, scope.SourceText(path)))
+            .ToArray();
+
+        IReadOnlyList<ClassInfo> subjects = MetricsProjection.SelectClasses(files, scope.ClassFilters);
+        if (subjects.Count == 0)
+        {
+            return EmptyTestGuard.Guard(DescribeCustomRule(rule), options);
+        }
+
+        return rule.Predicate is not null
+            ? CheckCustomPredicate(rule, subjects)
+            : CheckCustomThreshold(rule, subjects);
     }
 
     /// <summary>
@@ -248,6 +285,42 @@ internal static class MetricsAssertion
                 rule.Message!))
             .ToArray();
 
+    private static IReadOnlyList<Violation> CheckCustomThreshold(
+        CustomMetricRule rule,
+        IReadOnlyList<ClassInfo> subjects)
+    {
+        MetricComparison comparison = rule.Comparison!.Value;
+        int threshold = rule.Threshold!.Value;
+
+        return subjects
+            .Select(classInfo => (ClassInfo: classInfo, Value: rule.Metric.Calculate(classInfo)))
+            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
+            .Select(pair => (Violation)new CustomMetricViolation(
+                pair.ClassInfo.FilePath,
+                pair.ClassInfo.Name,
+                rule.Metric.Name,
+                rule.Metric.Description,
+                pair.Value,
+                comparison,
+                threshold))
+            .ToArray();
+    }
+
+    private static IReadOnlyList<Violation> CheckCustomPredicate(
+        CustomMetricRule rule,
+        IReadOnlyList<ClassInfo> subjects) =>
+        subjects
+            .Select(classInfo => (ClassInfo: classInfo, Value: rule.Metric.Calculate(classInfo)))
+            .Where(pair => !rule.Predicate!(pair.Value, pair.ClassInfo))
+            .Select(pair => (Violation)new CustomMetricViolation(
+                pair.ClassInfo.FilePath,
+                pair.ClassInfo.Name,
+                rule.Metric.Name,
+                rule.Metric.Description,
+                pair.Value,
+                rule.Message!))
+            .ToArray();
+
     private static IReadOnlyList<Violation> CheckLcomThreshold(
         LcomMetricRule rule,
         IReadOnlyList<ClassInfo> subjects)
@@ -383,6 +456,32 @@ internal static class MetricsAssertion
         var builder = new StringBuilder(rule.Scope.DescribeScope());
         builder.Append(' ');
         builder.Append(MetricWords(rule.Metric.Kind));
+
+        if (rule.Predicate is not null)
+        {
+            builder.Append(" should satisfy '");
+            builder.Append(rule.Message);
+            builder.Append('\'');
+            return builder.ToString();
+        }
+
+        builder.Append(' ');
+        builder.Append(ComparisonWords(rule.Comparison!.Value));
+        builder.Append(' ');
+        builder.Append(rule.Threshold!.Value);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// The whole custom-metric rule, in the words a report would show: the scope, the metric's name,
+    /// and the required comparison and threshold or the required predicate's message.
+    /// </summary>
+    private static string DescribeCustomRule(CustomMetricRule rule)
+    {
+        var builder = new StringBuilder(rule.Scope.DescribeScope());
+        builder.Append(" custom metric '");
+        builder.Append(rule.Metric.Name);
+        builder.Append('\'');
 
         if (rule.Predicate is not null)
         {
