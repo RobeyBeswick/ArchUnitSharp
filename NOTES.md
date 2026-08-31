@@ -1,5 +1,15 @@
 # NOTES
 
+WHY: Issue 37 — the metrics HTML report renderer lives in a `Rendering` sub-namespace, not the
+`Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
+rendering a metrics data map is neither an assertion nor a projection, and the graph module's
+`Rendering` sub-namespace (issue 29) set the precedent for a format sub-namespace. The exporter and
+the per-builder `export as html(path)` write to the exact path given and return it — no `.html`
+extension is appended and no nil is returned, unlike the Ruby sibling, because the C# graph module's
+`export as html` is the in-repo convention for an export terminal. The data map is
+`metric [subject]` → value formatted in the invariant culture, and `MetricsExporter` also offers a
+`to html()` in-memory form so a caller who already has a data map never needs the filesystem.
+
 WHY: Issue 36 — the exact six threshold verbs already ship on every metric selection
 (`ShouldBeBelow`, `ShouldBeAbove`, `ShouldBe`, `ShouldBeBelowOrEqual`,
 `ShouldBeAboveOrEqual`, `ShouldSatisfy` on `MetricSelection`, `DistanceMetricSelection`,

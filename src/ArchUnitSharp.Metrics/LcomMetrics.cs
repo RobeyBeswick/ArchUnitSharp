@@ -1,5 +1,8 @@
 namespace ArchUnitSharp.Metrics;
 
+using ArchUnitSharp.Common.Extraction;
+using ArchUnitSharp.Metrics.Rendering;
+
 /// <summary>
 /// The cohesion-metric section of a metrics rule chain: <c>lcom</c>. Built from <see cref="Metrics.Lcom"/>;
 /// its metric methods name what a rule measures and each returns the <see cref="LcomMetricSelection"/>
@@ -13,6 +16,12 @@ namespace ArchUnitSharp.Metrics;
 /// family: the class-level <see cref="Lcom96a"/>, <see cref="Lcom96b"/>, <see cref="Lcom1"/>,
 /// <see cref="Lcom2"/>, <see cref="Lcom3"/>, <see cref="Lcom4"/>, <see cref="Lcom5"/> and
 /// <see cref="LcomStar"/>.
+/// </para>
+/// <para>
+/// <see cref="ExportAsHtml"/> is the section's report terminal: it measures every cohesion metric over
+/// the scope's classes and writes the measurements as a self-contained HTML page. A report is a data
+/// form, not a rule, so an empty scope exports an explicit <c>No metric data.</c> page rather than a
+/// violation.
 /// </para>
 /// <para>
 /// This type is immutable and safe for concurrent use. Building a rule from it never mutates the scope
@@ -91,4 +100,22 @@ public sealed class LcomMetrics
     /// </summary>
     /// <returns>The metric selection whose threshold methods complete the rule.</returns>
     public LcomMetricSelection LcomStar() => new(_metrics, Calculation.LcomMetrics.LcomStar());
+
+    /// <summary>
+    /// <c>export as html(path)</c>: measures every cohesion metric over the scope's classes —
+    /// <c>lcom96a</c>, <c>lcom96b</c>, <c>lcom1</c>, <c>lcom2</c>, <c>lcom3</c>, <c>lcom4</c>,
+    /// <c>lcom5</c> and <c>lcom*</c> — and writes the measurements as a self-contained HTML page at
+    /// <paramref name="path"/>, creating the file's directory when it does not exist. The title, the
+    /// timestamp and the stylesheet come from <paramref name="options"/>, which defaults to
+    /// <c>new MetricsExportOptions()</c> when <see langword="null"/>.
+    /// </summary>
+    /// <param name="path">The file to write. Must not be <see langword="null"/> or empty.</param>
+    /// <param name="options">The report's options; <see langword="null"/> means the defaults in <see cref="MetricsExportOptions"/>.</param>
+    /// <returns><paramref name="path"/>, which now holds the HTML document.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is empty.</exception>
+    /// <exception cref="UserError">The scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    /// <exception cref="TechnicalError">The file cannot be written.</exception>
+    public string ExportAsHtml(string path, MetricsExportOptions? options = null) =>
+        MetricsExporter.ExportAsHtml(MetricsReportData.Lcom(_metrics), path, options);
 }

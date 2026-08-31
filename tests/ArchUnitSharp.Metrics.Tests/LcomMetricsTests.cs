@@ -87,6 +87,35 @@ public class LcomMetricsTests
         Assert.Equal("project metrics in folder 'src'", scope.DescribeScope());
     }
 
+    [Fact]
+    public void ExportAsHtml_writes_the_lcom_reports_html_and_returns_the_path()
+    {
+        using var dir = new TempDir();
+        const string split =
+            "namespace App;\n" +
+            "public class Split\n" +
+            "{\n" +
+            "    private int _a;\n" +
+            "    private int _b;\n" +
+            "    public void A() { _a = 1; }\n" +
+            "    public void B() { _b = 2; }\n" +
+            "}\n";
+        string path = dir.File("lcom.html");
+        var builder = new Metrics(Graph(Self("src/Split.cs")), _ => split).Lcom();
+
+        string written = builder.ExportAsHtml(
+            path,
+            new MetricsExportOptions { IncludeTimestamp = false, Title = "Cohesion" });
+
+        Assert.Equal(path, written);
+        string html = File.ReadAllText(path);
+        Assert.StartsWith("<!DOCTYPE html>", html);
+        Assert.Contains("<title>Cohesion</title>", html);
+        Assert.Contains("lcom96a [src/Split.cs:App.Split]", html);
+        Assert.Contains("lcom4 [src/Split.cs:App.Split]", html);
+        Assert.DoesNotContain("Generated:", html);
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

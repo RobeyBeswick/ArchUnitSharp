@@ -108,7 +108,39 @@ public class DistanceMetricsTests
         Assert.Equal("project metrics", distance.Metrics.DescribeScope());
     }
 
+    [Fact]
+    public void ExportAsHtml_writes_the_distance_reports_html_and_returns_the_path()
+    {
+        using var dir = new TempDir();
+        var sources = new Dictionary<string, string>
+        {
+            ["src/Models/IThing.cs"] = "namespace App;\npublic interface IThing { }\n",
+            ["src/Services/Car.cs"] = "namespace App;\npublic class Car : IThing { }\n",
+        };
+        var graph = Graph(
+            Self("src/Models/IThing.cs"),
+            Self("src/Services/Car.cs"),
+            Using("src/Services/Car.cs", "src/Models/IThing.cs"));
+        string path = dir.File("distance.html");
+        var builder = new Metrics(graph, identifier => sources[identifier]).Distance();
+
+        string written = builder.ExportAsHtml(
+            path,
+            new MetricsExportOptions { IncludeTimestamp = false, Title = "Distance" });
+
+        Assert.Equal(path, written);
+        string html = File.ReadAllText(path);
+        Assert.StartsWith("<!DOCTYPE html>", html);
+        Assert.Contains("<title>Distance</title>", html);
+        Assert.Contains("abstractness [src/Services/Car.cs]", html);
+        Assert.Contains("instability [src/Services/Car.cs]", html);
+        Assert.DoesNotContain("Generated:", html);
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);
+
+    private static Edge Using(string source, string target) =>
+        new(source, target, external: false, ImportKind.Using);
 }

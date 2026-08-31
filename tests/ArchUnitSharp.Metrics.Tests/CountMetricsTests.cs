@@ -78,6 +78,32 @@ public class CountMetricsTests
         Assert.Equal("project metrics in folder 'src'", scope.DescribeScope());
     }
 
+    [Fact]
+    public void ExportAsHtml_writes_the_count_reports_html_and_returns_the_path()
+    {
+        using var dir = new TempDir();
+        const string source =
+            "namespace App;\n" +
+            "public class Car\n" +
+            "{\n" +
+            "    public void Drive() { }\n" +
+            "}\n";
+        string path = dir.File("counts.html");
+        var builder = new Metrics(Graph(Self("src/Car.cs")), _ => source).Count();
+
+        string written = builder.ExportAsHtml(
+            path,
+            new MetricsExportOptions { IncludeTimestamp = false, Title = "Counts" });
+
+        Assert.Equal(path, written);
+        string html = File.ReadAllText(path);
+        Assert.StartsWith("<!DOCTYPE html>", html);
+        Assert.Contains("<title>Counts</title>", html);
+        Assert.Contains("method count [src/Car.cs:App.Car]", html);
+        Assert.Contains("lines of code [src/Car.cs]", html);
+        Assert.DoesNotContain("Generated:", html);
+    }
+
     private static Graph Graph(params Edge[] edges) => new(edges);
 
     private static Edge Self(string file) => new(file, file, external: false, ImportKind.None);

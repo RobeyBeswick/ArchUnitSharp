@@ -1,6 +1,7 @@
 namespace ArchUnitSharp.Metrics;
 
 using ArchUnitSharp.Common.Extraction;
+using ArchUnitSharp.Metrics.Rendering;
 
 /// <summary>
 /// The distance-metric section of a metrics rule chain: <c>distance</c>. Built from
@@ -17,6 +18,12 @@ using ArchUnitSharp.Common.Extraction;
 /// <see cref="Instability"/>, <see cref="DistanceFromMainSequence"/>, <see cref="CouplingFactor"/>
 /// and <see cref="NormalisedDistance"/>. The zone methods each return the guard's terminal directly —
 /// a rule reads <c>not in zone of pain</c>, not a comparison.
+/// </para>
+/// <para>
+/// <see cref="ExportAsHtml"/> is the section's report terminal: it measures every distance metric over
+/// the scope's files and writes the measurements as a self-contained HTML page. A report is a data
+/// form, not a rule, so an empty scope exports an explicit <c>No metric data.</c> page rather than a
+/// violation.
 /// </para>
 /// <para>
 /// This type is immutable and safe for concurrent use. Building a rule from it never mutates the scope
@@ -98,4 +105,22 @@ public sealed class DistanceMetrics
     /// </summary>
     /// <returns>The rule's terminal, checked with <see cref="ICheckable.Check(CheckOptions?)"/>.</returns>
     public ICheckable NotInZoneOfUselessness() => new DistanceZoneRule(_metrics, DistanceZone.Uselessness);
+
+    /// <summary>
+    /// <c>export as html(path)</c>: measures every distance metric over the scope's files —
+    /// <c>abstractness</c>, <c>instability</c>, <c>distance from main sequence</c>, <c>coupling
+    /// factor</c> and <c>normalised distance</c> — and writes the measurements as a self-contained
+    /// HTML page at <paramref name="path"/>, creating the file's directory when it does not exist. The
+    /// title, the timestamp and the stylesheet come from <paramref name="options"/>, which defaults to
+    /// <c>new MetricsExportOptions()</c> when <see langword="null"/>.
+    /// </summary>
+    /// <param name="path">The file to write. Must not be <see langword="null"/> or empty.</param>
+    /// <param name="options">The report's options; <see langword="null"/> means the defaults in <see cref="MetricsExportOptions"/>.</param>
+    /// <returns><paramref name="path"/>, which now holds the HTML document.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is empty.</exception>
+    /// <exception cref="UserError">The scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    /// <exception cref="TechnicalError">The file cannot be written.</exception>
+    public string ExportAsHtml(string path, MetricsExportOptions? options = null) =>
+        MetricsExporter.ExportAsHtml(MetricsReportData.Distance(_metrics), path, options);
 }

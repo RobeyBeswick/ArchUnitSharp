@@ -1,5 +1,8 @@
 namespace ArchUnitSharp.Metrics;
 
+using ArchUnitSharp.Common.Extraction;
+using ArchUnitSharp.Metrics.Rendering;
+
 /// <summary>
 /// The count-metric section of a metrics rule chain: <c>count</c>. Built from
 /// <see cref="Metrics.Count"/>; its metric methods name what a rule counts and each returns the
@@ -15,6 +18,12 @@ namespace ArchUnitSharp.Metrics;
 /// and <see cref="Interfaces"/>. There is no <c>functions</c> metric: C# has no file-level function
 /// concept distinct from a type member, and the issue's rule is to skip a metric the language cannot
 /// express rather than fake it.
+/// </para>
+/// <para>
+/// <see cref="ExportAsHtml"/> is the section's report terminal: it measures every count metric over
+/// the scope's subjects and writes the measurements as a self-contained HTML page. A report is a data
+/// form, not a rule, so an empty scope exports an explicit <c>No metric data.</c> page rather than a
+/// violation.
 /// </para>
 /// <para>
 /// This type is immutable and safe for concurrent use. Building a rule from it never mutates the scope
@@ -86,4 +95,23 @@ public sealed class CountMetrics
     /// </summary>
     /// <returns>The metric selection whose threshold methods complete the rule.</returns>
     public MetricSelection Interfaces() => new(_metrics, Calculation.CountMetrics.Interfaces());
+
+    /// <summary>
+    /// <c>export as html(path)</c>: measures every count metric over the scope's subjects — the
+    /// class-level <c>method count</c> and <c>field count</c> of each selected class and the file-level
+    /// <c>lines of code</c>, <c>statements</c>, <c>imports</c>, <c>classes</c> and <c>interfaces</c> of
+    /// each selected file — and writes the measurements as a self-contained HTML page at
+    /// <paramref name="path"/>, creating the file's directory when it does not exist. The title, the
+    /// timestamp and the stylesheet come from <paramref name="options"/>, which defaults to
+    /// <c>new MetricsExportOptions()</c> when <see langword="null"/>.
+    /// </summary>
+    /// <param name="path">The file to write. Must not be <see langword="null"/> or empty.</param>
+    /// <param name="options">The report's options; <see langword="null"/> means the defaults in <see cref="MetricsExportOptions"/>.</param>
+    /// <returns><paramref name="path"/>, which now holds the HTML document.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="path"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="path"/> is empty.</exception>
+    /// <exception cref="UserError">The scope was built without a source provider, so a selected file's text is unavailable.</exception>
+    /// <exception cref="TechnicalError">The file cannot be written.</exception>
+    public string ExportAsHtml(string path, MetricsExportOptions? options = null) =>
+        MetricsExporter.ExportAsHtml(MetricsReportData.Count(_metrics), path, options);
 }

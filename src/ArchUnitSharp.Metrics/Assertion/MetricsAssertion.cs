@@ -455,7 +455,7 @@ internal static class MetricsAssertion
     {
         var builder = new StringBuilder(rule.Scope.DescribeScope());
         builder.Append(' ');
-        builder.Append(MetricWords(rule.Metric.Kind));
+        builder.Append(MetricWords.Count(rule.Metric.Kind));
 
         if (rule.Predicate is not null)
         {
@@ -506,7 +506,7 @@ internal static class MetricsAssertion
     {
         var builder = new StringBuilder(rule.Scope.DescribeScope());
         builder.Append(' ');
-        builder.Append(LcomWords(rule.Metric.Kind));
+        builder.Append(MetricWords.Lcom(rule.Metric.Kind));
 
         if (rule.Predicate is not null)
         {
@@ -531,7 +531,7 @@ internal static class MetricsAssertion
     {
         var builder = new StringBuilder(rule.Scope.DescribeScope());
         builder.Append(' ');
-        builder.Append(DistanceWords(rule.Metric.Kind));
+        builder.Append(MetricWords.Distance(rule.Metric.Kind));
 
         if (rule.Predicate is not null)
         {
@@ -559,59 +559,6 @@ internal static class MetricsAssertion
         builder.Append(ZoneWords(rule.Zone));
         return builder.ToString();
     }
-
-    /// <summary>
-    /// The metric's own words for a report.
-    /// </summary>
-    private static string MetricWords(CountMetricKind kind) => kind switch
-    {
-        CountMetricKind.MethodCount => "method count",
-        CountMetricKind.FieldCount => "field count",
-        CountMetricKind.LinesOfCode => "lines of code",
-        CountMetricKind.Statements => "statements",
-        CountMetricKind.Imports => "imports",
-        CountMetricKind.Classes => "classes",
-        CountMetricKind.Interfaces => "interfaces",
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(kind),
-            kind,
-            "Kind is not a defined CountMetricKind value."),
-    };
-
-    /// <summary>
-    /// The cohesion metric's own words for a report.
-    /// </summary>
-    private static string LcomWords(LcomMetricKind kind) => kind switch
-    {
-        LcomMetricKind.Lcom96a => "lcom96a",
-        LcomMetricKind.Lcom96b => "lcom96b",
-        LcomMetricKind.Lcom1 => "lcom1",
-        LcomMetricKind.Lcom2 => "lcom2",
-        LcomMetricKind.Lcom3 => "lcom3",
-        LcomMetricKind.Lcom4 => "lcom4",
-        LcomMetricKind.Lcom5 => "lcom5",
-        LcomMetricKind.LcomStar => "lcom*",
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(kind),
-            kind,
-            "Kind is not a defined LcomMetricKind value."),
-    };
-
-    /// <summary>
-    /// The distance metric's own words for a report.
-    /// </summary>
-    private static string DistanceWords(DistanceMetricKind kind) => kind switch
-    {
-        DistanceMetricKind.Abstractness => "abstractness",
-        DistanceMetricKind.Instability => "instability",
-        DistanceMetricKind.DistanceFromMainSequence => "distance from main sequence",
-        DistanceMetricKind.CouplingFactor => "coupling factor",
-        DistanceMetricKind.NormalisedDistance => "normalised distance",
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(kind),
-            kind,
-            "Kind is not a defined DistanceMetricKind value."),
-    };
 
     /// <summary>
     /// The zone's own words for a report: <c>not in zone of pain</c> for
