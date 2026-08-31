@@ -2,6 +2,7 @@ using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Extraction;
 using ArchUnitSharp.Files;
 using ArchUnitSharp.Layers;
+using ArchUnitSharp.Metrics;
 using ArchUnitSharp.Slices;
 
 namespace ArchUnitSharp.Tests;
@@ -703,5 +704,143 @@ public class ProjectTests
     public void Graph_rejects_a_null_location()
     {
         Assert.Throws<ArgumentNullException>(() => Project.Graph(null!));
+    }
+
+    [Fact]
+    public void ProjectMetrics_checks_a_count_metric_rule()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { public void A() { } public void B() { } }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .Count()
+            .MethodCount()
+            .ShouldBe(2)
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectMetrics_flags_a_class_whose_method_count_misses_the_threshold()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { public void A() { } public void B() { } }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .Count()
+            .MethodCount()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new MetricViolation(
+                    "src/App/Program.cs",
+                    "App.Program",
+                    CountMetricKind.MethodCount,
+                    value: 2,
+                    MetricComparison.Equal,
+                    threshold: 1),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectMetrics_measures_the_file_level_counts_from_source()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using System;\nnamespace App { public class Program { } }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .Count()
+            .Imports()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectMetrics_with_selectors_narrows_the_scope()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { }\n");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models;\npublic class Car { }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<string> models = Project.ProjectMetrics(location).InFolder("src/Models").SelectFiles();
+        IReadOnlyList<string> cars = Project.ProjectMetrics(location).InFolder("src/Models").SelectFiles();
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, models);
+        Assert.Equal(models, cars);
+    }
+
+    [Fact]
+    public void ProjectMetrics_guards_a_scope_that_matches_nothing()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .WithName("Car.cs")
+            .Count()
+            .Classes()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project metrics with name 'Car.cs' classes should be 1") },
+            violations);
+    }
+
+    [Fact]
+    public void Metrics_alias_returns_a_scope_like_project_metrics()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "namespace App;\npublic class Program { public void A() { } }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> canonical = Project.ProjectMetrics(location)
+            .Count()
+            .MethodCount()
+            .ShouldBe(1)
+            .Check();
+        IReadOnlyList<Violation> alias = Project.Metrics(location)
+            .Count()
+            .MethodCount()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void ProjectMetrics_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.ProjectMetrics(null!));
+    }
+
+    [Fact]
+    public void Metrics_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.Metrics(null!));
     }
 }

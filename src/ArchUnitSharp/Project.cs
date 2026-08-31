@@ -9,14 +9,16 @@ using ArchUnitSharp.Extraction;
 /// hands the caller the files module's fluent surface over that graph; <c>project layers</c> (alias
 /// <c>layers</c>) does the same for the layers module; <c>project slices</c> (alias <c>slices</c>) does
 /// the same for the slices module; <c>project graph</c> (alias <c>graph</c>) does the same for the
-/// graph module's reports.
+/// graph module's reports; <c>project metrics</c> (alias <c>metrics</c>) does the same for the metrics
+/// module's count metrics.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Each files entry point returns an immutable <see cref="ArchUnitSharp.Files.Files"/> selection,
 /// each layers entry point returns an immutable <see cref="ArchUnitSharp.Layers.Layers"/> policy, each
-/// slices entry point returns an immutable <see cref="ArchUnitSharp.Slices.Slices"/> policy and each
-/// graph entry point returns an immutable <see cref="ArchUnitSharp.Graph.GraphReport"/>. The
+/// slices entry point returns an immutable <see cref="ArchUnitSharp.Slices.Slices"/> policy, each
+/// graph entry point returns an immutable <see cref="ArchUnitSharp.Graph.GraphReport"/> and each
+/// metrics entry point returns an immutable <see cref="ArchUnitSharp.Metrics.Metrics"/> scope. The
 /// parameterless overloads locate the project from the current working directory; the overloads that
 /// take a <see cref="ProjectLocation"/> analyse exactly the located project, which is how a caller
 /// targets a repository other than the current one.
@@ -29,8 +31,8 @@ using ArchUnitSharp.Extraction;
 /// <para>
 /// Each files selection is wired with a source-text provider that reads a file's content from the
 /// located project's root on demand, which is what an <c>adhere to</c> rule hands its custom
-/// predicate. The read happens lazily, per selected file and per check, and only when such a rule
-/// runs.
+/// predicate and what a metrics scope's count rules extract their counts from. The read happens
+/// lazily, per selected file and per check, and only when such a rule runs.
 /// </para>
 /// </remarks>
 public static class Project
@@ -176,6 +178,42 @@ public static class Project
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
     public static ArchUnitSharp.Slices.Slices Slices(ProjectLocation location) => ProjectSlices(location);
+
+    /// <summary>
+    /// <c>project metrics</c>: a count-metrics scope over the project located from the current working
+    /// directory.
+    /// </summary>
+    /// <returns>A metrics scope over the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Metrics.Metrics ProjectMetrics() => ProjectMetrics(ProjectLocator.Locate());
+
+    /// <summary>
+    /// <c>project metrics</c>: a count-metrics scope over exactly the given project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>A metrics scope over the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Metrics.Metrics ProjectMetrics(ProjectLocation location) =>
+        new ArchUnitSharp.Metrics.Metrics(GraphCache.Get(location), identifier => ReadSource(location, identifier));
+
+    /// <summary>
+    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-metrics scope over the project
+    /// located from the current working directory.
+    /// </summary>
+    /// <returns>A metrics scope over the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Metrics.Metrics Metrics() => ProjectMetrics();
+
+    /// <summary>
+    /// <c>metrics</c>, the alias of <c>project metrics</c>: a count-metrics scope over exactly the
+    /// given project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>A metrics scope over the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Metrics.Metrics Metrics(ProjectLocation location) => ProjectMetrics(location);
 
     /// <summary>
     /// The source-text provider's disk half: reads one file's full text, given its project-relative

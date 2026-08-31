@@ -10,12 +10,16 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ArchUnitSharp.Common.Tests" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Files" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Graph" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Layers" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Metrics" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Slices" />
+    <InternalsVisibleTo Include="ArchUnitSharp.Metrics.Tests" />
+    <InternalsVisibleTo Include="ArchUnitSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.9.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArchUnitSharp.Common\ArchUnitSharp.Common.csproj" />
   </ItemGroup>
 
 </Project>

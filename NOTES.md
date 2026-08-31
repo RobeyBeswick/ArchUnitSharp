@@ -1,5 +1,32 @@
 # NOTES
 
+WHY: Issue 32 — the count-metric surface ships seven metrics, not the eight the issue lists: the
+siblings' file-level `functions` metric is omitted because C# has no file-level function concept
+distinct from a type member — every method belongs to a class — and the issue's rule is to skip a
+metric C# cannot express rather than fake it. The other seven map cleanly: `method count` and `field
+count` per class, and `lines of code`, `statements`, `imports`, `classes` and `interfaces` per file.
+
+WHY: Issue 32 — the count-metric rule chain has no `Should`/`ShouldNot` mood; the terminal is a
+threshold predicate, so the chain reads `metrics in folder 'src' count method count should be below
+20`. The threshold predicates are exactly AGENTS.md's six (`should be below`, `should be above`,
+`should be`, `should be below or equal to`, `should be above or equal to`, `should satisfy`), the
+"should" is part of the predicate, and no sibling implementation exposes a negated threshold — a
+comparison's negation is another comparison, not a separate mood.
+
+WHY: Issue 32 — the metrics module's `Extraction` sub-namespace parses each selected file's source
+text with Roslyn (`Microsoft.CodeAnalysis.CSharp`, the same package and version the graph-extraction
+project uses) rather than importing `ArchUnitSharp.Extraction`: that pipeline turns source into a
+dependency `Graph`, whereas the metrics extraction turns source into per-file and per-class count
+facts, and the graph pipeline's types are internal. The disk read stays behind the injected source
+provider the composition root wires, exactly like the files module's `adhere to` provider.
+
+WHY: Issue 32 — the four selectors split by subject kind: `with name` / `in folder` / `in path`
+narrow the files, and `for classes matching` narrows by class, matching the class's fully qualified
+name. A class-level metric's subjects are the matching classes; a file-level metric's subjects are
+the files that contain at least one matching class, measured whole — the sibling Ruby semantics — so
+a `for classes matching` scope that leaves no subject trips the empty-test guard in both metric
+kinds.
+
 WHY: Issue 31 — the PlantUML parser and renderer live in a `Uml` sub-namespace, not the
 `Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
 parsing diagram text and rendering a diagram are neither assertions nor projections, and the graph
