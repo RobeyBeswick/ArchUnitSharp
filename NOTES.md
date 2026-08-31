@@ -1,5 +1,20 @@
 # NOTES
 
+WHY: Issue 36 — the exact six threshold verbs already ship on every metric selection
+(`ShouldBeBelow`, `ShouldBeAbove`, `ShouldBe`, `ShouldBeBelowOrEqual`,
+`ShouldBeAboveOrEqual`, `ShouldSatisfy` on `MetricSelection`, `DistanceMetricSelection`,
+`LcomMetricSelection` and `CustomMetricSelection`), so the issue lands as
+`ThresholdVerbTests`, a reflection pin that the vocabulary is exactly those six — no synonym
+(`should equal`, `should be at most`, `should be less than`, or any other) can be added to a
+selection or to any other public type of the module.
+
+WHY: Issue 36 — the test critic's `36-tests-1a` invocation again returned no verdict (crash
+or timeout) with no code findings. The diff is 2 files / 63 lines — far too small for "too
+large to review in one pass". Re-ran the full gate clean: restore, build (0 warnings, 0
+errors), format --verify-no-changes, all test projects passed (nothing removed, nothing
+skipped), no vulnerable packages. This is the reviewer-tooling hang class documented in
+Rounds 2, 3 and 4, not a code defect; there is nothing to fix.
+
 WHY: Issue 35 — `custom metric(name, description, fn)` lands on the scope (`Metrics.CustomMetric`),
 not the count section, matching the sibling's scope-level `custom_metric`, and the custom value is an
 `int`, the count-metric vocabulary, where the sibling's is any Numeric. The `should satisfy(fn)`
