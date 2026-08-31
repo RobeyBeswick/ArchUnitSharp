@@ -106,6 +106,18 @@ public class ViolationFactoryTests
     }
 
     [Fact]
+    public void A_diagram_adherence_violation_names_the_two_slices()
+    {
+        var violation = new DiagramAdherenceViolation("billing", "System.Linq");
+
+        string message = ViolationFactory.Format(violation);
+
+        Assert.Equal(
+            "Slice 'billing' must not depend on 'System.Linq' (not in the diagram).",
+            message);
+    }
+
+    [Fact]
     public void A_null_violation_is_rejected()
     {
         Assert.Throws<ArgumentNullException>(() => ViolationFactory.Format(null!));

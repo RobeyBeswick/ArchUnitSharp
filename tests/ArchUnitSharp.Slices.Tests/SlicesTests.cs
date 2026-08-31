@@ -155,6 +155,34 @@ public class SlicesTests
     }
 
     [Fact]
+    public void Two_branches_off_one_parent_do_not_see_each_others_diagram_rules()
+    {
+        var parent = new Slices(Graph(Self("src/features/billing/order.cs")))
+            .DefinedBy("src/features/(**)/*.cs");
+
+        var withBilling = parent.Should().AdhereToDiagram("component [billing]");
+        var withAuth = parent.Should().AdhereToDiagram("component [auth]");
+
+        Assert.Single(withBilling.DiagramRules);
+        Assert.Single(withAuth.DiagramRules);
+        Assert.Empty(parent.DiagramRules);
+    }
+
+    [Fact]
+    public void DiagramRules_return_a_fresh_copy_on_every_read()
+    {
+        var slices = new Slices(Graph(Self("src/features/billing/order.cs")))
+            .DefinedBy("src/features/(**)/*.cs")
+            .Should()
+            .AdhereToDiagram("component [billing]");
+
+        IReadOnlyList<DiagramRule> rules = slices.DiagramRules;
+        ((DiagramRule[])rules)[0] = null!;
+
+        Assert.NotNull(slices.DiagramRules[0]);
+    }
+
+    [Fact]
     public void DefinedBy_rejects_a_null_glob()
     {
         Assert.Throws<ArgumentNullException>(() => new Slices(Graph(Self("a.cs"))).DefinedBy(null!));

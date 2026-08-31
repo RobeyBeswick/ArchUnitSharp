@@ -604,6 +604,48 @@ public class ProjectTests
     }
 
     [Fact]
+    public void ProjectSlices_adheres_to_a_diagram_file()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/features/billing/order.cs", "using App.Shared; namespace App.Features.Billing { public class Order { } }");
+        project.WriteFile("src/shared/Util.cs", "namespace App.Shared { public class Util { } }");
+        project.WriteFile("docs/architecture.puml", "component [features/billing]\ncomponent [shared]\n[features/billing] --> [shared]");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectSlices(location)
+            .DefinedBy("src/(**)/*.cs")
+            .Should()
+            .AdhereToDiagramInFile(project.Root + "/docs/architecture.puml")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectSlices_reports_a_dependency_a_diagram_file_does_not_allow()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/features/billing/order.cs", "using App.Shared; namespace App.Features.Billing { public class Order { } }");
+        project.WriteFile("src/shared/Util.cs", "namespace App.Shared { public class Util { } }");
+        project.WriteFile("docs/architecture.puml", "component [features/billing]\ncomponent [shared]");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectSlices(location)
+            .DefinedBy("src/(**)/*.cs")
+            .Should()
+            .AdhereToDiagramInFile(project.Root + "/docs/architecture.puml")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new DiagramAdherenceViolation("features/billing", "shared") },
+            violations);
+    }
+
+    [Fact]
     public void ProjectGraph_renders_a_dot_report_of_the_project()
     {
         using var project = new TempProject();

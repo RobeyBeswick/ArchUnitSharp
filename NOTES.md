@@ -1,5 +1,43 @@
 # NOTES
 
+WHY: Issue 31 — the PlantUML parser and renderer live in a `Uml` sub-namespace, not the
+`Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
+parsing diagram text and rendering a diagram are neither assertions nor projections, and the graph
+module's `Rendering` sub-namespace set the precedent for a format sub-namespace.
+
+WHY: Issue 31 — `adhere to diagram` ships only in the positive mood (the `Should` mood), like issue
+18's `should have no cycles`: "should not adhere to diagram" is not a sentence an architect would
+write, and ArchUnitRuby — the sibling implementation of this issue — exposes it only on its positive
+builder too.
+
+WHY: Issue 31 — the diagram is parsed when the rule is built: `adhere to diagram` parses its text and
+`adhere to diagram in file` reads and parses its file immediately, so the assertion layer stays pure
+(no disk I/O) and a malformed diagram is a `UserError` naming its line at build time, where the
+ArchUnitRuby reference reads the file lazily at check time.
+
+WHY: Issue 31 — the parser raises a `UserError` naming the line for a malformed `component` line and
+for a `[`-starting line that is not a well-formed bracketed arrow, where ArchUnitRuby silently
+ignores every non-matching line: the sibling issue's test list names "malformed/duplicate components"
+and "precise line diagnostics", so a typo in a declaration must not silently vanish. Lines that use
+other PlantUML features (`skinparam`, titles, `@`-directives) are still ignored, so the subset stays
+small.
+
+WHY: Issue 31 — the diagram rule's empty-test guard fires when the slicing selects no files *or* the
+diagram declares no components and no arrows: a diagram that declares nothing matches nothing, which
+is a failure rather than a pass — the same logic that makes a `to` glob matching no file an empty
+test for `contain dependency`.
+
+WHY: Issue 31 — `adhere to diagram` validates only that the actual slice-to-slice dependencies are
+allowed by the diagram, one `DiagramAdherenceViolation` per slice pair; a diagram arrow the code does
+not realise is not a violation, matching ArchUnitRuby's and ArchUnitJava's `adhereToPlantUmlDiagram`
+semantics.
+
+WHY: Issue 31 — the modifiers `ignoring orphan slices` / `ignoring external slices` are present
+participles on the `Should` mood that return a new `Should` carrying the options bag; they affect
+only the adhere-to-diagram predicates (a `ContainDependency` chained after a modifier ignores it,
+which the mood's remarks state), because `ContainDependency` predates them and the modifiers are
+diagram-specific.
+
 WHY: Issue 30 — the `(**)` capture compiles to a greedy `(.*)` (any, possibly empty, sequence of
 characters, ArchUnit's `..` idiom) rather than the segment-aligned form `**` uses, because the point
 of the capture is the exact text it names a slice with; the capture never includes the separator that

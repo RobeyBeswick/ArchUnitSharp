@@ -2,21 +2,24 @@ namespace ArchUnitSharp.Slices.Assertion;
 
 using System.Text;
 using ArchUnitSharp.Common.Extraction;
+using ArchUnitSharp.Projection;
 using ArchUnitSharp.Slices.Projection;
 
 /// <summary>
-/// The slices module's shared assertion: the one place a <c>contain dependency(from, to)</c> rule's
-/// outcome is computed. The mood of a rule arrives as the <c>negate</c> boolean — there is no separate
-/// code path for <c>should not</c> — and every rule routes an empty selection through the shared
-/// <see cref="EmptyTestGuard"/>, so every terminal that calls in here reaches the guard.
+/// The slices module's shared assertion: the one place a <c>contain dependency(from, to)</c> rule's and
+/// an <c>adhere to diagram</c> rule's outcome is computed. The mood of a rule arrives as the
+/// <c>negate</c> boolean — there is no separate code path for <c>should not</c> — and every rule routes
+/// an empty selection through the shared <see cref="EmptyTestGuard"/>, so every terminal that calls in
+/// here reaches the guard.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A rule's subject is the whole slicing: the files the definitions assign to slices. A subject with
-/// no sliced files, whose <c>from</c> filter matches no sliced file, or whose <c>to</c> filter matches
-/// no file of the graph is a violation (<see cref="EmptyTestViolation"/>) rather than a pass, unless
-/// <see cref="CheckOptions.AllowEmptyTests"/> is set — a typo in a definition or a <c>from</c>/<c>to</c>
-/// glob must not pass silently. A policy with no rules passes.
+/// no sliced files is a violation (<see cref="EmptyTestViolation"/>) rather than a pass, unless
+/// <see cref="CheckOptions.AllowEmptyTests"/> is set — a typo in a definition must not pass silently.
+/// The contain-dependency predicate adds its own guard when the <c>from</c> filter matches no sliced
+/// file or the <c>to</c> filter matches no file of the graph, and the adhere-to-diagram predicate adds
+/// its own guard when the diagram declares no components and no arrows. A policy with no rules passes.
 /// </para>
 /// <para>
 /// With the negated mood, each dependency from a sliced file matching <c>from</c> to a file matching
@@ -26,6 +29,13 @@ using ArchUnitSharp.Slices.Projection;
 /// dependency is contained in the slice of its importing file — while the imported file need not be,
 /// because a dependency can leave the slicing. An external edge's target is not a file, and a self-edge
 /// is not a dependency, so neither is ever counted.
+/// </para>
+/// <para>
+/// The <c>adhere to diagram</c> predicate compares the slicing's projected slice-to-slice dependencies
+/// against the diagram's allowed arrows: each dependency the diagram does not allow is reported as one
+/// <see cref="DiagramAdherenceViolation"/> naming the two slices, one violation per slice pair. Its
+/// modifiers ignore external dependencies (a dependency whose target lies outside the project) and
+/// orphan endpoints (a dependency whose source or target the diagram does not declare as a component).
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
@@ -49,6 +59,11 @@ internal static class SlicesAssertion
         foreach (SliceRule rule in slices.Rules)
         {
             result.AddRange(CheckRule(slices, rule, options));
+        }
+
+        foreach (DiagramRule rule in slices.DiagramRules)
+        {
+            result.AddRange(CheckDiagramRule(slices, rule, options));
         }
 
         return result;
@@ -105,6 +120,82 @@ internal static class SlicesAssertion
                 rule.From.Pattern.Glob,
                 rule.To.Pattern.Glob))
             .ToArray();
+    }
+
+    /// <summary>
+    /// Checks one <c>adhere to diagram</c> rule and returns the violations it found: every projected
+    /// dependency between slices that the diagram does not allow, one
+    /// <see cref="DiagramAdherenceViolation"/> per slice pair. Routes an empty slicing or a diagram
+    /// that declares no components and no arrows through the shared <see cref="EmptyTestGuard"/> before
+    /// comparing dependencies. The rule's modifiers — ignoring external slices and ignoring orphan
+    /// slices — drop dependencies from the comparison before it happens.
+    /// </summary>
+    /// <param name="slices">The policy the rule belongs to. Must not be <see langword="null"/>.</param>
+    /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
+    /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <returns>The violations found; empty when the rule passed.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="slices"/> or <paramref name="rule"/> is <see langword="null"/>.</exception>
+    public static IReadOnlyList<Violation> CheckDiagramRule(Slices slices, DiagramRule rule, CheckOptions? options)
+    {
+        ArgumentNullException.ThrowIfNull(slices);
+        ArgumentNullException.ThrowIfNull(rule);
+
+        if (SlicesProjection.SlicedFiles(slices.Graph, slices.Definitions).Count == 0
+            || (rule.Diagram.Components.Count == 0 && rule.Diagram.Dependencies.Count == 0))
+        {
+            return EmptyTestGuard.Guard(DescribeDiagramRule(slices, rule), options);
+        }
+
+        IReadOnlyList<ProjectedEdge> edges = Projection.Edges(
+            slices.Graph,
+            SlicesProjection.DiagramMap(identifier => SlicesProjection.SliceOf(slices.Definitions, identifier)));
+
+        return edges
+            .Where(edge => !Ignored(edge, rule))
+            .Where(edge => !rule.Diagram.Allows(edge.Source, edge.Target))
+            .Select(static edge => (Violation)new DiagramAdherenceViolation(edge.Source, edge.Target))
+            .ToArray();
+    }
+
+    /// <summary>
+    /// Decides whether <paramref name="edge"/> is a dependency the rule ignores: an external dependency
+    /// when external slices are ignored, or a dependency whose source or target the diagram does not
+    /// declare as a component when orphan slices are ignored.
+    /// </summary>
+    private static bool Ignored(ProjectedEdge edge, DiagramRule rule)
+    {
+        if (rule.Options.IgnoreExternalSlices && edge.External)
+        {
+            return true;
+        }
+
+        if (!rule.Options.IgnoreOrphanSlices)
+        {
+            return false;
+        }
+
+        return !rule.Diagram.Components.Contains(edge.Source)
+            || !rule.Diagram.Components.Contains(edge.Target);
+    }
+
+    /// <summary>
+    /// Describes this rule as the subject of a report, for the empty-test guard: the entry phrase
+    /// <c>project slices</c>, one clause per definition in the order they were added, and the rule's
+    /// own predicate words — e.g. <c>project slices defined by 'src/features/(**)/*.cs' should adhere
+    /// to diagram</c>.
+    /// </summary>
+    private static string DescribeDiagramRule(Slices slices, DiagramRule rule)
+    {
+        var builder = new StringBuilder("project slices");
+        foreach (SliceDefinition definition in slices.Definitions)
+        {
+            builder.Append(' ');
+            builder.Append(definition.Description);
+        }
+
+        builder.Append(" should ");
+        builder.Append(rule.Description);
+        return builder.ToString();
     }
 
     /// <summary>

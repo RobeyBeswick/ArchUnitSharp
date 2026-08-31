@@ -20,9 +20,9 @@ using ArchUnitSharp.Slices;
 /// handled — <see cref="EmptyTestViolation"/>, <see cref="FileViolation"/>,
 /// <see cref="AdhereToViolation"/>, <see cref="DependencyViolation"/>,
 /// <see cref="CycleViolation"/>, <see cref="LayerViolation"/>,
-/// <see cref="ForbiddenDependencyViolation"/> and <see cref="MissingDependencyViolation"/> — and a
-/// violation subtype this factory does not know is a defect, so it throws rather than fabricate a
-/// message.
+/// <see cref="ForbiddenDependencyViolation"/>, <see cref="MissingDependencyViolation"/> and
+/// <see cref="DiagramAdherenceViolation"/> — and a violation subtype this factory does not know is a
+/// defect, so it throws rather than fabricate a message.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use; the strings it returns are freshly built on
@@ -54,6 +54,8 @@ public static class ViolationFactory
                 $"Slice '{v.Slice}' must not contain a dependency from '{v.Source}' to '{v.Target}'.",
             MissingDependencyViolation v =>
                 $"Slice '{v.Slice}' must contain a dependency from a file matching '{v.From}' to a file matching '{v.To}'.",
+            DiagramAdherenceViolation v =>
+                $"Slice '{v.SourceSlice}' must not depend on '{v.TargetSlice}' (not in the diagram).",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(violation),
                 violation,

@@ -28,6 +28,9 @@ using ArchUnitSharp.Projection;
 /// The <see cref="Map"/> hook is what the public <c>slice by pattern</c>, <c>slice by regex</c> and
 /// <c>slice by file suffix</c> projections are built from: it relabels each edge's endpoints to their
 /// slice labels and drops any edge whose endpoint is not sliced, external edges included.
+/// <see cref="DiagramMap"/> is the diagram-adherence counterpart: it keeps external edges, relabelling
+/// an external edge's target to the module name as written, which is how an <c>adhere to diagram</c>
+/// rule and the generated PlantUML report see dependencies that leave the project.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies on every
@@ -248,6 +251,38 @@ internal static class SlicesProjection
         int separator = identifier.LastIndexOf('/');
         int dot = identifier.LastIndexOf('.');
         return dot < 0 || dot < separator ? null : identifier.Substring(dot);
+    }
+
+    /// <summary>
+    /// The relabelling hook the <c>adhere to diagram</c> rule and the generated PlantUML report project
+    /// the graph with: like <see cref="Map"/>, it relabels each edge's endpoints to their slice labels,
+    /// but an external edge is kept with its target relabelled to the module name as written, so a
+    /// dependency that leaves the project appears in the projected view. A self-edge maps to a
+    /// self-loop on the file's slice, which the projection layer filters out of the edge set.
+    /// </summary>
+    /// <param name="labelOf">The file-to-slice assignment. Must not be <see langword="null"/>.</param>
+    /// <returns>A <see cref="MapFunction"/> that relabels the graph by slice, keeping external edges.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="labelOf"/> is <see langword="null"/>.</exception>
+    public static MapFunction DiagramMap(Func<string, string?> labelOf)
+    {
+        ArgumentNullException.ThrowIfNull(labelOf);
+
+        return edge =>
+        {
+            string? source = labelOf(edge.Source);
+            if (source is null)
+            {
+                return null;
+            }
+
+            string? target = edge.External ? edge.Target : labelOf(edge.Target);
+            if (target is null)
+            {
+                return null;
+            }
+
+            return new ProjectedEdge(source, target, edge.External, edge.ImportKinds, new[] { edge });
+        };
     }
 
     /// <summary>
