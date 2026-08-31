@@ -1,5 +1,29 @@
 # NOTES
 
+WHY: Issue 38 — the `except` companion ships on the files module's scope selectors and depend-on
+object selectors (`WithName`, `InFolder`, `InPath`, `InFile`, `Matching`) and the metrics module's
+file and class selectors (`WithName`, `InFolder`, `InPath`, `ForClassesMatching`) only. The layers
+`defined by`, slices `defined by` and graph focus patterns are declarations or report scoping, not
+the scope/object selectors AGENTS.md's grammar names, and the naming/location predicates
+(`should (not) have name / be in folder / be in path`) are the PREDICATE part of the grammar, not
+selectors — giving them `except` would change the mood types' return shapes. The kernel `Filter`
+carries the exclusions, so a future issue can add the same two companions to any of these with no
+projection change.
+
+WHY: Issue 38 — a plain-pattern exclusion is interpreted strictly against the parent selector's own
+target, per the issue's wording ("interpreted against the parent selector's target"), not
+ArchUnitTS's expanded target set (path, folder and filename for a folder parent): a cross-target
+exclusion uses the explicit `Except(Filter)` form, e.g. `InFolder("app").Except(MatcherFactory.Filename("index.ts"))`.
+This keeps the "plain pattern inherits the parent target" rule one sentence long and predictable,
+at the cost of the sibling's filename-in-a-folder-selector ergonomic.
+
+WHY: Issue 38 — `except` is a chained companion that must follow the selector it narrows (it
+replaces the most recently applied selector with an exclusion-carrying copy, and raises a
+`UserError` when there is none), rather than the ArchUnitTS second-argument options bag, because the
+library's builders are immutable and a half-built selection must stay storable and branchable; the
+word is a modifier AGENTS.md's grammar reserves for present participles, but the issue fixes the
+word and the issue wins.
+
 WHY: Issue 37 — the metrics HTML report renderer lives in a `Rendering` sub-namespace, not the
 `Assertion / Projection / Calculation / Extraction` quartet AGENTS.md names for each domain module:
 rendering a metrics data map is neither an assertion nor a projection, and the graph module's

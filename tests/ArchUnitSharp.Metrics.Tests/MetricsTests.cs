@@ -173,6 +173,140 @@ public class MetricsTests
     }
 
     [Fact]
+    public void InFolder_except_narrows_the_scope()
+    {
+        var metrics = new Metrics(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"),
+            Self("src/Models/Car.cs")))
+            .InFolder("src/App**")
+            .Except("src/App/generated");
+
+        Assert.Equal(new[] { "src/App/Program.cs" }, metrics.SelectFiles());
+    }
+
+    [Fact]
+    public void Except_with_an_explicit_target_excludes_by_that_target()
+    {
+        var metrics = new Metrics(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Self("src/App/Car.cs")))
+            .InFolder("src/Models")
+            .Except(MatcherFactory.Filename("Truck.cs"));
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, metrics.SelectFiles());
+    }
+
+    [Fact]
+    public void ForClassesMatching_except_is_carried_on_the_class_filters()
+    {
+        var metrics = new Metrics(Graph(Self("a.cs")))
+            .ForClassesMatching("*Service")
+            .Except("*Legacy*");
+
+        Assert.Equal(
+            "project metrics for classes matching '*Service' except for classes matching '*Legacy*'",
+            metrics.DescribeScope());
+    }
+
+    [Fact]
+    public void Two_branches_off_one_class_selector_do_not_see_each_others_exclusions()
+    {
+        var parent = new Metrics(Graph(Self("a.cs"))).ForClassesMatching("*Service");
+
+        var noLegacy = parent.Except("*Legacy*");
+        var noBike = parent.Except("*Bike*");
+
+        Assert.Equal(
+            "project metrics for classes matching '*Service'",
+            parent.DescribeScope());
+        Assert.Equal(
+            "project metrics for classes matching '*Service' except for classes matching '*Legacy*'",
+            noLegacy.DescribeScope());
+        Assert.Equal(
+            "project metrics for classes matching '*Service' except for classes matching '*Bike*'",
+            noBike.DescribeScope());
+    }
+
+    [Fact]
+    public void Except_attaches_to_the_most_recent_selector()
+    {
+        var metrics = new Metrics(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Generated/Gen.cs"),
+            Self("src/App/Car.cs")))
+            .WithName("*.cs")
+            .InFolder("src/Models**")
+            .Except("src/Models/Generated");
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, metrics.SelectFiles());
+    }
+
+    [Fact]
+    public void Except_leaves_the_parent_scope_unchanged()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"));
+        var parent = new Metrics(graph).InFolder("src/App**");
+
+        var narrowed = parent.Except("src/App/generated");
+
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/generated/Gen.cs" }, parent.SelectFiles());
+        Assert.Equal(new[] { "src/App/Program.cs" }, narrowed.SelectFiles());
+    }
+
+    [Fact]
+    public void Two_branches_off_one_selector_do_not_see_each_others_exclusions()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"),
+            Self("src/App/legacy/Old.cs"));
+        var parent = new Metrics(graph).InFolder("src/App**");
+
+        var noGenerated = parent.Except("src/App/generated");
+        var noLegacy = parent.Except("src/App/legacy");
+
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/legacy/Old.cs" }, noGenerated.SelectFiles());
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/generated/Gen.cs" }, noLegacy.SelectFiles());
+        Assert.Equal(
+            new[] { "src/App/Program.cs", "src/App/generated/Gen.cs", "src/App/legacy/Old.cs" },
+            parent.SelectFiles());
+    }
+
+    [Fact]
+    public void Except_without_a_selector_raises_a_user_error()
+    {
+        var metrics = new Metrics(Graph(Self("a.cs")));
+
+        Assert.Throws<UserError>(() => metrics.Except("Car.cs"));
+        Assert.Throws<UserError>(() => metrics.Except(MatcherFactory.Filename("Car.cs")));
+    }
+
+    [Fact]
+    public void Except_rejects_a_null_glob()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Metrics(Graph(Self("a.cs"))).WithName("a.cs").Except((string)null!));
+    }
+
+    [Fact]
+    public void Except_rejects_an_empty_glob()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Metrics(Graph(Self("a.cs"))).WithName("a.cs").Except(string.Empty));
+    }
+
+    [Fact]
+    public void Except_rejects_a_null_filter()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Metrics(Graph(Self("a.cs"))).WithName("a.cs").Except((Filter)null!));
+    }
+
+    [Fact]
     public void Count_returns_a_count_section_over_this_scope()
     {
         var metrics = new Metrics(Graph(Self("a.cs"))).InFolder("src");

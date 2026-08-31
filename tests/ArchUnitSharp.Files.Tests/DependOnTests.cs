@@ -220,6 +220,108 @@ public class DependOnTests
     }
 
     [Fact]
+    public void DependOn_except_narrows_the_object_by_an_explicit_target()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models")
+            .Except(MatcherFactory.Filename("Truck.cs"));
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            violations);
+    }
+
+    [Fact]
+    public void DependOn_except_with_a_plain_pattern_inherits_the_selector_target()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Generated/Gen.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Generated/Gen.cs")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InPath("src/Models/**")
+            .Except("src/Models/Generated/**");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            violations);
+    }
+
+    [Fact]
+    public void Two_branches_off_one_object_do_not_see_each_others_exclusions()
+    {
+        var files = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs")))
+            .InFolder("src/App");
+
+        var parent = files.ShouldNot().DependOn().InFolder("src/Models");
+        var noCar = parent.Except(MatcherFactory.Filename("Car.cs"));
+        var noTruck = parent.Except(MatcherFactory.Filename("Truck.cs"));
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs"),
+                new DependencyViolation("src/App/Program.cs", "src/Models/Truck.cs"),
+            },
+            parent.Check());
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Truck.cs") },
+            noCar.Check());
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            noTruck.Check());
+    }
+
+    [Fact]
+    public void DependOn_except_without_a_selector_raises_a_user_error()
+    {
+        Assert.Throws<UserError>(() =>
+            new Files(Graph(Self("a.cs"))).Should().DependOn().Except("Car.cs"));
+    }
+
+    [Fact]
+    public void DependOn_guards_an_object_an_except_reduces_to_nothing()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Should()
+            .DependOn()
+            .InFolder("src/Models")
+            .Except("**");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        var empty = Assert.Single(violations);
+        Assert.Equal(
+            "project files in folder 'src/App' should depend on files in folder 'src/Models' except in folder '**'",
+            Assert.IsType<EmptyTestViolation>(empty).RuleDescription);
+    }
+
+    [Fact]
     public void DependOn_guards_a_selection_that_matches_nothing()
     {
         var rule = new Files(Graph(Self("a.cs"))).WithName("Car.cs").Should().DependOn().WithName("Truck.cs");

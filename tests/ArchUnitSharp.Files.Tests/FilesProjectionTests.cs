@@ -107,6 +107,47 @@ public class FilesProjectionTests
     }
 
     [Fact]
+    public void Select_respects_a_filters_exclusion()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Generated/Gen.cs"),
+            Self("src/App/Program.cs"));
+
+        IReadOnlyList<string> files = FilesProjection.Select(
+            graph,
+            new[]
+            {
+                new Filter(
+                    new Pattern("src/Models"),
+                    MatchTarget.PathWithoutFilename,
+                    new[] { new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename) }),
+            });
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, files);
+    }
+
+    [Fact]
+    public void Select_an_exclusion_that_excludes_everything_yields_no_files()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"));
+
+        IReadOnlyList<string> files = FilesProjection.Select(
+            graph,
+            new[]
+            {
+                new Filter(
+                    new Pattern("src/Models"),
+                    MatchTarget.PathWithoutFilename,
+                    new[] { new Filter(new Pattern("**"), MatchTarget.PathWithoutFilename) }),
+            });
+
+        Assert.Empty(files);
+    }
+
+    [Fact]
     public void Select_result_is_sorted_ordinally()
     {
         var graph = Graph(
@@ -203,6 +244,29 @@ public class FilesProjectionTests
             new[] { Filename("A.cs") });
 
         Assert.Empty(cycles);
+    }
+
+    [Fact]
+    public void Cycles_ignores_files_an_exclusion_vetoes()
+    {
+        var graph = Graph(
+            Using("A/a.cs", "B/b.cs"),
+            Using("B/b.cs", "A/a.cs"),
+            Using("C/c.cs", "D/d.cs"),
+            Using("D/d.cs", "C/c.cs"));
+
+        IReadOnlyList<IReadOnlyList<string>> cycles = FilesProjection.Cycles(
+            graph,
+            new[]
+            {
+                new Filter(
+                    new Pattern("**"),
+                    MatchTarget.Path,
+                    new[] { new Filter(new Pattern("C/*"), MatchTarget.Path) }),
+            });
+
+        var cycle = Assert.Single(cycles);
+        Assert.Equal(new[] { "A/a.cs", "B/b.cs", "A/a.cs" }, cycle);
     }
 
     [Fact]
@@ -324,6 +388,31 @@ public class FilesProjectionTests
             graph,
             new[] { Folder("src/App") },
             new[] { Folder("src/Models"), Filename("Car.cs") });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
+            dependencies);
+    }
+
+    [Fact]
+    public void Dependencies_ignores_edges_to_object_files_an_exclusion_vetoes()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Using("src/App/Program.cs", "src/Models/Car.cs"),
+            Using("src/App/Program.cs", "src/Models/Truck.cs"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.Dependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[]
+            {
+                new Filter(
+                    new Pattern("src/Models"),
+                    MatchTarget.PathWithoutFilename,
+                    new[] { new Filter(new Pattern("Truck.cs"), MatchTarget.Filename) }),
+            });
 
         Assert.Equal(
             new[] { new Edge("src/App/Program.cs", "src/Models/Car.cs", external: false, ImportKind.Using) },
@@ -478,6 +567,27 @@ public class FilesProjectionTests
     }
 
     [Fact]
+    public void ExternalModules_skips_modules_an_exclusion_vetoes()
+    {
+        var graph = Graph(
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Runtime"),
+            External("src/App/Program.cs", "Newtonsoft.Json"));
+
+        IReadOnlyList<string> modules = FilesProjection.ExternalModules(
+            graph,
+            new[]
+            {
+                new Filter(
+                    new Pattern("System.*"),
+                    MatchTarget.Path,
+                    new[] { new Filter(new Pattern("System.Runtime"), MatchTarget.Path) }),
+            });
+
+        Assert.Equal(new[] { "System.Linq" }, modules);
+    }
+
+    [Fact]
     public void ExternalModules_result_is_sorted_ordinally()
     {
         var graph = Graph(
@@ -579,6 +689,30 @@ public class FilesProjectionTests
                 new Edge("src/App/Program.cs", "Newtonsoft.Json", external: true, ImportKind.Using),
                 new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using),
             },
+            dependencies);
+    }
+
+    [Fact]
+    public void ExternalDependencies_skips_edges_to_modules_an_exclusion_vetoes()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Runtime"));
+
+        IReadOnlyList<Edge> dependencies = FilesProjection.ExternalDependencies(
+            graph,
+            new[] { Folder("src/App") },
+            new[]
+            {
+                new Filter(
+                    new Pattern("System.*"),
+                    MatchTarget.Path,
+                    new[] { new Filter(new Pattern("System.Runtime"), MatchTarget.Path) }),
+            });
+
+        Assert.Equal(
+            new[] { new Edge("src/App/Program.cs", "System.Linq", external: true, ImportKind.Using) },
             dependencies);
     }
 

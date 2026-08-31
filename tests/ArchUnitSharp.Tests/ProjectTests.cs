@@ -174,6 +174,117 @@ public class ProjectTests
     }
 
     [Fact]
+    public void ProjectFiles_selector_except_excludes_the_generated_folder()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/app/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/app/generated/Generated.cs", "namespace App.Generated { public class Generated { } }");
+        project.WriteFile("src/app/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<string> files = Project.ProjectFiles(location)
+            .InPath("src/app/**")
+            .Except("src/app/generated/**")
+            .Select();
+
+        Assert.Equal(new[] { "src/app/Models/Car.cs", "src/app/Program.cs" }, files);
+    }
+
+    [Fact]
+    public void ProjectFiles_selector_except_keeps_a_rule_off_the_generated_folder()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/app/Program.cs", "namespace App { public class Program { } }");
+        project.WriteFile("src/app/generated/Generated.cs", "using App.Models; namespace App.Generated { public class Generated { } }");
+        project.WriteFile("src/app/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InPath("src/app/**")
+            .Except("src/app/generated/**")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/app/Models")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_selector_except_guards_a_selection_reduced_to_nothing()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/app/Program.cs", "namespace App { public class Program { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InPath("src/app/**")
+            .Except("**")
+            .Should()
+            .Exist()
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files in path 'src/app/**' except in path '**' should exist") },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_depend_on_except_keeps_one_object_file_out_of_the_rule()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using App.Models; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+        project.WriteFile("src/Models/Truck.cs", "namespace App.Models { public class Truck { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOn()
+            .InFolder("src/Models")
+            .Except(MatcherFactory.Filename("Truck.cs"))
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "src/Models/Car.cs") },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectFiles_depend_on_external_modules_except_keeps_one_module_out_of_the_rule()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile(
+            "src/App/Program.cs",
+            "using System.Linq; using System.Collections.Generic; namespace App { public class Program { } }");
+        project.WriteFile("src/Models/Car.cs", "namespace App.Models { public class Car { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectFiles(location)
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOnExternalModules()
+            .Matching("System.*")
+            .Except("System.Collections.Generic")
+            .Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "System.Linq") },
+            violations);
+    }
+
+    [Fact]
     public void ProjectFiles_should_have_no_cycles_flags_each_cycle_as_a_readable_path()
     {
         using var project = new TempProject();
@@ -786,6 +897,27 @@ public class ProjectTests
 
         Assert.Equal(new[] { "src/Models/Car.cs" }, models);
         Assert.Equal(models, cars);
+    }
+
+    [Fact]
+    public void ProjectMetrics_selector_except_keeps_a_rule_off_the_generated_folder()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/App/Program.cs", "using System;\nnamespace App;\npublic class Program { }\n");
+        project.WriteFile("src/App/generated/Gen.cs", "namespace App.Generated;\npublic class Gen { }\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .InFolder("src/App**")
+            .Except("src/App/generated")
+            .Count()
+            .Imports()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Empty(violations);
     }
 
     [Fact]

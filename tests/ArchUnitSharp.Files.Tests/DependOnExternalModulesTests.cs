@@ -149,6 +149,57 @@ public class DependOnExternalModulesTests
     }
 
     [Fact]
+    public void Matching_except_skips_the_excluded_module()
+    {
+        var rule = new Files(Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Runtime")))
+            .InFolder("src/App")
+            .ShouldNot()
+            .DependOnExternalModules()
+            .Matching("System.*")
+            .Except("System.Runtime");
+
+        IReadOnlyList<Violation> violations = rule.Check();
+
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "System.Linq") },
+            violations);
+    }
+
+    [Fact]
+    public void Matching_except_leaves_the_parent_object_unchanged()
+    {
+        var files = new Files(Graph(
+            Self("src/App/Program.cs"),
+            External("src/App/Program.cs", "System.Linq"),
+            External("src/App/Program.cs", "System.Runtime")))
+            .InFolder("src/App");
+
+        var parent = files.ShouldNot().DependOnExternalModules().Matching("System.*");
+        var narrowed = parent.Except("System.Runtime");
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new DependencyViolation("src/App/Program.cs", "System.Linq"),
+                new DependencyViolation("src/App/Program.cs", "System.Runtime"),
+            },
+            parent.Check());
+        Assert.Equal(
+            new Violation[] { new DependencyViolation("src/App/Program.cs", "System.Linq") },
+            narrowed.Check());
+    }
+
+    [Fact]
+    public void Matching_except_without_a_selector_raises_a_user_error()
+    {
+        Assert.Throws<UserError>(() =>
+            new Files(Graph(Self("a.cs"))).Should().DependOnExternalModules().Except("System.*"));
+    }
+
+    [Fact]
     public void DependOnExternalModules_guards_a_selection_that_matches_nothing()
     {
         var rule = new Files(Graph(Self("a.cs")))

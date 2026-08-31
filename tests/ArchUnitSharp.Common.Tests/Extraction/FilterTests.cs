@@ -105,6 +105,119 @@ public class FilterTests
     }
 
     [Fact]
+    public void A_matching_exclusion_vetoes_the_parent_match()
+    {
+        var filter = new Filter(
+            new Pattern("src/Models**"),
+            MatchTarget.PathWithoutFilename,
+            new[] { new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename) });
+
+        Assert.True(filter.Matches("src/Models/Car.cs"));
+        Assert.False(filter.Matches("src/Models/Generated/Gen.cs"));
+        Assert.False(filter.Matches("src/Other/Car.cs"));
+    }
+
+    [Fact]
+    public void An_exclusion_is_matched_against_its_own_target()
+    {
+        var filter = new Filter(
+            new Pattern("**"),
+            MatchTarget.Path,
+            new[] { new Filter(new Pattern("Car.cs"), MatchTarget.Filename) });
+
+        Assert.True(filter.Matches("src/Models/Truck.cs"));
+        Assert.False(filter.Matches("src/Models/Car.cs"));
+        Assert.False(filter.Matches("Car.cs"));
+    }
+
+    [Fact]
+    public void An_exclusion_that_matches_nothing_leaves_the_filter_unchanged()
+    {
+        var filter = new Filter(
+            new Pattern("src/Models"),
+            MatchTarget.PathWithoutFilename,
+            new[] { new Filter(new Pattern("src/App"), MatchTarget.PathWithoutFilename) });
+
+        Assert.True(filter.Matches("src/Models/Car.cs"));
+        Assert.False(filter.Matches("src/Models/Generated/Gen.cs"));
+    }
+
+    [Fact]
+    public void WithExclusion_returns_a_filter_that_carries_the_exclusion()
+    {
+        var filter = CreateFilter(new Pattern("src/Models**"), MatchTarget.PathWithoutFilename);
+
+        var narrowed = filter.WithExclusion(
+            new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename));
+
+        Assert.True(filter.Matches("src/Models/Generated/Gen.cs"));
+        Assert.False(narrowed.Matches("src/Models/Generated/Gen.cs"));
+        Assert.True(narrowed.Matches("src/Models/Car.cs"));
+        Assert.Empty(filter.Exclusions);
+        Assert.Single(narrowed.Exclusions);
+    }
+
+    [Fact]
+    public void A_filter_with_different_exclusions_is_unequal()
+    {
+        var plain = new Filter(new Pattern("src/Models"), MatchTarget.PathWithoutFilename);
+        var excluded = new Filter(
+            new Pattern("src/Models"),
+            MatchTarget.PathWithoutFilename,
+            new[] { new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename) });
+        var same = new Filter(
+            new Pattern("src/Models"),
+            MatchTarget.PathWithoutFilename,
+            new[] { new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename) });
+
+        Assert.NotEqual(plain, excluded);
+        Assert.Equal(excluded, same);
+        Assert.Equal(excluded.GetHashCode(), same.GetHashCode());
+    }
+
+    [Fact]
+    public void The_exclusion_list_is_copied_on_construction()
+    {
+        var list = new List<Filter> { new Filter(new Pattern("Car.cs"), MatchTarget.Filename) };
+
+        var filter = new Filter(new Pattern("**"), MatchTarget.Path, list);
+        list.Add(new Filter(new Pattern("Truck.cs"), MatchTarget.Filename));
+        list.Clear();
+
+        Assert.True(filter.Matches("src/Models/Truck.cs"));
+        Assert.False(filter.Matches("src/Models/Car.cs"));
+    }
+
+    [Fact]
+    public void The_exclusion_list_getter_returns_a_copy()
+    {
+        var filter = new Filter(
+            new Pattern("**"),
+            MatchTarget.Path,
+            new[] { new Filter(new Pattern("Car.cs"), MatchTarget.Filename) });
+
+        IReadOnlyList<Filter> first = filter.Exclusions;
+        IReadOnlyList<Filter> second = filter.Exclusions;
+
+        Assert.NotSame(first, second);
+    }
+
+    [Fact]
+    public void Null_exclusions_are_rejected()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Filter(new Pattern("*.cs"), MatchTarget.Path, null!));
+    }
+
+    [Fact]
+    public void Null_exclusion_is_rejected_by_WithExclusion()
+    {
+        var filter = CreateFilter(new Pattern("*.cs"), MatchTarget.Path);
+
+        Assert.Throws<ArgumentNullException>(() => filter.WithExclusion(null!));
+    }
+
+    [Fact]
     public void Filters_with_a_different_target_are_unequal()
     {
         var filename = CreateFilter(new Pattern("*.cs"), MatchTarget.Filename);

@@ -81,6 +81,27 @@ public class MetricsProjectionTests
     }
 
     [Fact]
+    public void SelectFiles_respects_a_filters_exclusion()
+    {
+        var graph = Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Generated/Gen.cs"),
+            Self("src/App/Program.cs"));
+
+        IReadOnlyList<string> files = MetricsProjection.SelectFiles(
+            graph,
+            new[]
+            {
+                new Filter(
+                    new Pattern("src/Models**"),
+                    MatchTarget.PathWithoutFilename,
+                    new[] { new Filter(new Pattern("src/Models/Generated"), MatchTarget.PathWithoutFilename) }),
+            });
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, files);
+    }
+
+    [Fact]
     public void SelectFiles_result_is_sorted_ordinally()
     {
         var graph = Graph(
@@ -252,6 +273,28 @@ public class MetricsProjectionTests
         Assert.Equal(
             new[] { "src/A.cs:App.Models.Car" },
             classes.Select(static info => info.Identifier));
+    }
+
+    [Fact]
+    public void SelectClasses_respects_a_class_filters_exclusion()
+    {
+        var files = new[]
+        {
+            File("src/A.cs", "App.Services.UserService", "App.Services.LegacyService"),
+        };
+
+        IReadOnlyList<ClassInfo> classes = MetricsProjection.SelectClasses(
+            files,
+            new[]
+            {
+                new Filter(
+                    new Pattern("*Service"),
+                    MatchTarget.Path,
+                    new[] { new Filter(new Pattern("*Legacy*"), MatchTarget.Path) }),
+            });
+
+        var single = Assert.Single(classes);
+        Assert.Equal("src/A.cs:App.Services.UserService", single.Identifier);
     }
 
     [Fact]

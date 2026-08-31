@@ -155,6 +155,150 @@ public class FilesTests
     }
 
     [Fact]
+    public void InFolder_except_narrows_the_selection()
+    {
+        var files = new Files(Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"),
+            Self("src/Models/Car.cs")))
+            .InFolder("src/App**")
+            .Except("src/App/generated");
+
+        Assert.Equal(new[] { "src/App/Program.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void InFile_except_narrows_by_the_class_style_name()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Self("src/App/Car.cs")))
+            .InFile("src.*")
+            .Except("src.Models.Truck");
+
+        Assert.Equal(new[] { "src/App/Car.cs", "src/Models/Car.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void Except_with_an_explicit_target_excludes_by_that_target()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Self("src/App/Car.cs")))
+            .InFolder("src/Models")
+            .Except(MatcherFactory.Filename("Truck.cs"));
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void Except_attaches_to_the_most_recent_selector()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Generated/Gen.cs"),
+            Self("src/App/Car.cs")))
+            .WithName("*.cs")
+            .InFolder("src/Models**")
+            .Except("src/Models/Generated");
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void Chained_except_calls_narrow_the_same_selector()
+    {
+        var files = new Files(Graph(
+            Self("src/Models/Car.cs"),
+            Self("src/Models/Truck.cs"),
+            Self("src/Models/Generated/Gen.cs")))
+            .InPath("src/Models/**")
+            .Except("src/Models/Truck.cs")
+            .Except("src/Models/Generated/**");
+
+        Assert.Equal(new[] { "src/Models/Car.cs" }, files.Select());
+    }
+
+    [Fact]
+    public void Except_leaves_the_parent_selection_unchanged()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"));
+        var parent = new Files(graph).InFolder("src/App**");
+
+        var narrowed = parent.Except("src/App/generated");
+
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/generated/Gen.cs" }, parent.Select());
+        Assert.Equal(new[] { "src/App/Program.cs" }, narrowed.Select());
+    }
+
+    [Fact]
+    public void Two_branches_off_one_selector_do_not_see_each_others_exclusions()
+    {
+        var graph = Graph(
+            Self("src/App/Program.cs"),
+            Self("src/App/generated/Gen.cs"),
+            Self("src/App/legacy/Old.cs"));
+        var parent = new Files(graph).InFolder("src/App**");
+
+        var noGenerated = parent.Except("src/App/generated");
+        var noLegacy = parent.Except("src/App/legacy");
+
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/legacy/Old.cs" }, noGenerated.Select());
+        Assert.Equal(new[] { "src/App/Program.cs", "src/App/generated/Gen.cs" }, noLegacy.Select());
+        Assert.Equal(
+            new[] { "src/App/Program.cs", "src/App/generated/Gen.cs", "src/App/legacy/Old.cs" },
+            parent.Select());
+    }
+
+    [Fact]
+    public void Except_without_a_selector_raises_a_user_error()
+    {
+        var files = new Files(Graph(Self("a.cs")));
+
+        Assert.Throws<UserError>(() => files.Except("Car.cs"));
+        Assert.Throws<UserError>(() => files.Except(MatcherFactory.Filename("Car.cs")));
+    }
+
+    [Fact]
+    public void Except_rejects_a_null_glob()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Files(Graph(Self("a.cs"))).WithName("a.cs").Except((string)null!));
+    }
+
+    [Fact]
+    public void Except_rejects_an_empty_glob()
+    {
+        Assert.Throws<ArgumentException>(() =>
+            new Files(Graph(Self("a.cs"))).WithName("a.cs").Except(string.Empty));
+    }
+
+    [Fact]
+    public void Except_rejects_a_null_filter()
+    {
+        Assert.Throws<ArgumentNullException>(() =>
+            new Files(Graph(Self("a.cs"))).WithName("a.cs").Except((Filter)null!));
+    }
+
+    [Fact]
+    public void An_except_that_excludes_everything_is_guarded_as_an_empty_test()
+    {
+        var files = new Files(Graph(Self("src/App/Program.cs"), Self("src/Models/Car.cs")))
+            .InFolder("src/App")
+            .Except("**");
+
+        IReadOnlyList<Violation> violations = files.Should().Exist().Check();
+
+        Assert.Equal(
+            new Violation[] { new EmptyTestViolation("project files in folder 'src/App' except in folder '**' should exist") },
+            violations);
+    }
+
+    [Fact]
     public void InPath_rejects_a_null_glob()
     {
         Assert.Throws<ArgumentNullException>(() => new Files(Graph(Self("a.cs"))).InPath(null!));

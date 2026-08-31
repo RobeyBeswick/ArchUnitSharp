@@ -77,6 +77,42 @@ public sealed class DependOnExternalModules : ICheckable
         Add(new Filter(new Pattern(glob), MatchTarget.Path));
 
     /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the external modules
+    /// whose name matches <paramref name="glob"/>, the same selector an object uses. The glob is
+    /// matched against the module name as a whole, like <see cref="Matching"/>. Returns a new
+    /// <see cref="DependOnExternalModules"/>; the current object is unchanged. Must follow a
+    /// selector: there is nothing to exclude from otherwise.
+    /// </summary>
+    /// <param name="glob">The glob to match the excluded module names against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>A new object with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public DependOnExternalModules Except(string glob)
+    {
+        var pattern = new Pattern(glob);
+        Filter last = LastSelector();
+        return ReplaceLast(last.WithExclusion(new Filter(pattern, last.Target)));
+    }
+
+    /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the external modules
+    /// <paramref name="exclusion"/> matches. The exclusion is a fully targeted filter, evaluated
+    /// against the same module name the selector just applied matches. Returns a new
+    /// <see cref="DependOnExternalModules"/>; the current object is unchanged. Must follow a
+    /// selector: there is nothing to exclude from otherwise.
+    /// </summary>
+    /// <param name="exclusion">The exclusion to add. Must not be <see langword="null"/>.</param>
+    /// <returns>A new object with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="exclusion"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public DependOnExternalModules Except(Filter exclusion)
+    {
+        ArgumentNullException.ThrowIfNull(exclusion);
+        return ReplaceLast(LastSelector().WithExclusion(exclusion));
+    }
+
+    /// <summary>
     /// Checks this <c>should (not) depend on external modules</c> rule and returns the violations it
     /// found. An empty list means the rule passed.
     /// </summary>
@@ -107,8 +143,11 @@ public sealed class DependOnExternalModules : ICheckable
 
     /// <summary>
     /// Describes this object as the object of a rule, for a report: the noun phrase
-    /// <c>external modules</c> followed by one clause per selector. An object narrowed by
-    /// <c>Matching("System.*")</c> is described as <c>external modules matching 'System.*'</c>.
+    /// <c>external modules</c> followed by one <c>matching</c> clause per selector and one
+    /// <c>except matching</c> clause per exclusion. An object narrowed by
+    /// <c>Matching("System.*")</c> is described as <c>external modules matching 'System.*'</c>, and
+    /// one further narrowed by <c>Except("System.Runtime")</c> as
+    /// <c>external modules matching 'System.*' except matching 'System.Runtime'</c>.
     /// </summary>
     internal string DescribeObject()
     {
@@ -118,6 +157,16 @@ public sealed class DependOnExternalModules : ICheckable
             builder.Append(" matching '");
             builder.Append(filter.Pattern.Glob);
             builder.Append('\'');
+            foreach (Filter exclusion in filter.Exclusions)
+            {
+                builder.Append(" except ");
+                builder.Append(exclusion.Target == MatchTarget.Path
+                    ? "matching"
+                    : Files.SelectorWord(exclusion.Target));
+                builder.Append(" '");
+                builder.Append(exclusion.Pattern.Glob);
+                builder.Append('\'');
+            }
         }
 
         return builder.ToString();
@@ -128,6 +177,29 @@ public sealed class DependOnExternalModules : ICheckable
         var filters = new Filter[_filters.Length + 1];
         Array.Copy(_filters, filters, _filters.Length);
         filters[_filters.Length] = filter;
+        return new DependOnExternalModules(_files, _negate, filters);
+    }
+
+    /// <summary>
+    /// The selector <c>except</c> narrows: the most recently applied one. There is none before any
+    /// selector has been applied, which is a misuse of the fluent grammar and raises a
+    /// <see cref="UserError"/> naming the mistake.
+    /// </summary>
+    private Filter LastSelector() =>
+        _filters.Length == 0
+            ? throw new UserError(
+                "except must follow a selector (matching): there is no selector to exclude from.")
+            : _filters[^1];
+
+    /// <summary>
+    /// Returns a new object whose most recently applied selector is replaced by
+    /// <paramref name="replacement"/>, everything else unchanged. This is how <c>except</c> narrows
+    /// one selector without mutating the object it was called on.
+    /// </summary>
+    private DependOnExternalModules ReplaceLast(Filter replacement)
+    {
+        var filters = (Filter[])_filters.Clone();
+        filters[^1] = replacement;
         return new DependOnExternalModules(_files, _negate, filters);
     }
 }

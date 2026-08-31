@@ -14,7 +14,10 @@ using ArchUnitSharp.Common.Extraction;
 /// <para>
 /// A <see cref="Files"/> value names a set of files: every file in the graph when no selector has
 /// been applied, otherwise exactly the files that match every selector applied so far — selectors
-/// combine with AND. The MOOD of a rule is chosen with <see cref="Should"/> or
+/// combine with AND. Each selector's <c>except</c> companion (<see cref="Except(string)"/> /
+/// <see cref="Except(Filter)"/>) narrows that one selector: a file an exclusion matches is not
+/// selected by it, so "everything under <c>app/</c>, but not the generated folder" is one chain
+/// rather than an inverted rule. The MOOD of a rule is chosen with <see cref="Should"/> or
 /// <see cref="ShouldNot"/>; the PREDICATE and TERMINAL are the assertion layer's concern, and
 /// <see cref="Select"/> evaluates the scope's selection so a terminal can consume it.
 /// </para>
@@ -127,6 +130,47 @@ public sealed class Files
     public Files InFile(string glob) => Add(new Filter(new Pattern(glob), MatchTarget.Classname));
 
     /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the identifiers whose
+    /// own target part matches <paramref name="glob"/>. The glob is matched against the same part of
+    /// an identifier the selector just applied matches — a selection narrowed by
+    /// <c>InPath("app/**")</c> and then <c>Except("app/generated/**")</c> keeps every file under
+    /// <c>app/</c> but not the generated folder. To exclude by a different part, pass a fully
+    /// targeted filter to <see cref="Except(Filter)"/> instead. Returns a new <see cref="Files"/>;
+    /// the current selection is unchanged. Must follow a selector: there is nothing to exclude from
+    /// otherwise.
+    /// </summary>
+    /// <param name="glob">The glob to match the excluded identifiers' target part against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>A new selection with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public Files Except(string glob)
+    {
+        var pattern = new Pattern(glob);
+        Filter last = LastSelector();
+        return ReplaceLast(last.WithExclusion(new Filter(pattern, last.Target)));
+    }
+
+    /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the identifiers
+    /// <paramref name="exclusion"/> matches. The exclusion is a fully targeted filter, evaluated
+    /// against the same identifier the selector just applied matches — a selection narrowed by
+    /// <c>InFolder("app")</c> and then <c>Except(MatcherFactory.Filename("index.ts"))</c> keeps the
+    /// folder's files but not one named <c>index.ts</c>. Returns a new <see cref="Files"/>; the
+    /// current selection is unchanged. Must follow a selector: there is nothing to exclude from
+    /// otherwise.
+    /// </summary>
+    /// <param name="exclusion">The exclusion to add. Must not be <see langword="null"/>.</param>
+    /// <returns>A new selection with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="exclusion"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public Files Except(Filter exclusion)
+    {
+        ArgumentNullException.ThrowIfNull(exclusion);
+        return ReplaceLast(LastSelector().WithExclusion(exclusion));
+    }
+
+    /// <summary>
     /// <c>should</c>: begins a rule over this selection with the positive mood. Returns a new
     /// <see cref="Should"/>; the current selection is unchanged.
     /// </summary>
@@ -166,6 +210,30 @@ public sealed class Files
     }
 
     /// <summary>
+    /// The selector <c>except</c> narrows: the most recently applied one. There is none before any
+    /// selector has been applied, which is a misuse of the fluent grammar and raises a
+    /// <see cref="UserError"/> naming the mistake.
+    /// </summary>
+    private Filter LastSelector() =>
+        _filters.Length == 0
+            ? throw new UserError(
+                "except must follow a selector (with name, in folder, in path or in file): there is "
+                + "no selector to exclude from.")
+            : _filters[^1];
+
+    /// <summary>
+    /// Returns a new selection whose most recently applied selector is replaced by
+    /// <paramref name="replacement"/>, everything else unchanged. This is how <c>except</c> narrows
+    /// one selector without mutating the selection it was called on.
+    /// </summary>
+    private Files ReplaceLast(Filter replacement)
+    {
+        var filters = (Filter[])_filters.Clone();
+        filters[^1] = replacement;
+        return new Files(_graph, filters, _sourceText);
+    }
+
+    /// <summary>
     /// The per-file detail an <c>adhere to</c> rule's assertion materialises for one selected file:
     /// the file's identity and source text, read through this selection's source provider. Internal:
     /// the adhere-to assertion consumes it. A selection without a source provider — one built from a
@@ -199,23 +267,43 @@ public sealed class Files
 
     /// <summary>
     /// Describes this selection as the scope of a rule, for a report: the entry phrase
-    /// <c>project files</c> followed by one clause per selector, in the selector's own words. A
-    /// selection narrowed by <c>WithName("Car.cs")</c> is described as
-    /// <c>project files with name 'Car.cs'</c>.
+    /// <c>project files</c> followed by one clause per selector, in the selector's own words, and one
+    /// <c>except</c> clause per exclusion in the exclusion's own words. A selection narrowed by
+    /// <c>WithName("Car.cs")</c> is described as <c>project files with name 'Car.cs'</c>, and one
+    /// narrowed by <c>InFolder("app")</c> and <c>Except("app/generated")</c> as
+    /// <c>project files in folder 'app' except in folder 'app/generated'</c>.
     /// </summary>
     internal string DescribeScope()
     {
         var builder = new StringBuilder("project files");
         foreach (Filter filter in _filters)
         {
-            builder.Append(' ');
-            builder.Append(SelectorWord(filter.Target));
-            builder.Append(" '");
-            builder.Append(filter.Pattern.Glob);
-            builder.Append('\'');
+            AppendSelectorClause(builder, filter);
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Appends one selector's clause to a scope or object description: the selector's own words, the
+    /// pattern's glob, and one <c>except</c> clause per exclusion. Shared with the depend-on object's
+    /// description.
+    /// </summary>
+    internal static void AppendSelectorClause(StringBuilder builder, Filter filter)
+    {
+        builder.Append(' ');
+        builder.Append(SelectorWord(filter.Target));
+        builder.Append(" '");
+        builder.Append(filter.Pattern.Glob);
+        builder.Append('\'');
+        foreach (Filter exclusion in filter.Exclusions)
+        {
+            builder.Append(" except ");
+            builder.Append(SelectorWord(exclusion.Target));
+            builder.Append(" '");
+            builder.Append(exclusion.Pattern.Glob);
+            builder.Append('\'');
+        }
     }
 
     /// <summary>

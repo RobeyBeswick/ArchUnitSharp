@@ -17,7 +17,11 @@ using ArchUnitSharp.Metrics.Projection;
 /// <para>
 /// A <see cref="Metrics"/> value names a set of files: every file in the graph when no file selector
 /// has been applied, otherwise exactly the files that match every file selector applied so far —
-/// selectors combine with AND. <see cref="ForClassesMatching"/> narrows by class rather than file: it
+/// selectors combine with AND. Each selector's <c>except</c> companion
+/// (<see cref="Except(string)"/> / <see cref="Except(Filter)"/>) narrows that one selector: a
+/// subject an exclusion matches is not selected by it, so "everything under <c>app/</c>, but not the
+/// generated folder" is one chain rather than an inverted rule. <see cref="ForClassesMatching"/>
+/// narrows by class rather than file: it
 /// keeps the files that declare at least one class whose fully qualified name matches, and is what a
 /// class-level metric's subjects and a file-level metric's in-scope files are drawn from. The
 /// PREDICATE and TERMINAL of a rule chain are the <see cref="CountMetrics"/> / <see cref="LcomMetrics"/>
@@ -44,6 +48,7 @@ public sealed class Metrics
     private readonly Filter[] _fileFilters;
     private readonly Filter[] _classFilters;
     private readonly Func<string, string> _sourceText;
+    private readonly bool _lastSelectorWasClass;
 
     /// <summary>
     /// Creates a scope over every file of <paramref name="graph"/>. The scope has no access to the
@@ -59,6 +64,7 @@ public sealed class Metrics
         _fileFilters = Array.Empty<Filter>();
         _classFilters = Array.Empty<Filter>();
         _sourceText = NoSource;
+        _lastSelectorWasClass = false;
     }
 
     /// <summary>
@@ -78,14 +84,21 @@ public sealed class Metrics
         _fileFilters = Array.Empty<Filter>();
         _classFilters = Array.Empty<Filter>();
         _sourceText = sourceText;
+        _lastSelectorWasClass = false;
     }
 
-    private Metrics(Graph graph, Filter[] fileFilters, Filter[] classFilters, Func<string, string> sourceText)
+    private Metrics(
+        Graph graph,
+        Filter[] fileFilters,
+        Filter[] classFilters,
+        Func<string, string> sourceText,
+        bool lastSelectorWasClass)
     {
         _graph = graph;
         _fileFilters = fileFilters;
         _classFilters = classFilters;
         _sourceText = sourceText;
+        _lastSelectorWasClass = lastSelectorWasClass;
     }
 
     /// <summary>
@@ -142,6 +155,46 @@ public sealed class Metrics
         AddClass(new Filter(new Pattern(glob), MatchTarget.Path));
 
     /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the subjects whose own
+    /// target part matches <paramref name="glob"/>. The glob is matched against the same part of a
+    /// subject the selector just applied matches — a scope narrowed by <c>InPath("app/**")</c> and
+    /// then <c>Except("app/generated/**")</c> keeps every file under <c>app/</c> but not the
+    /// generated folder. To exclude by a different part, pass a fully targeted filter to
+    /// <see cref="Except(Filter)"/> instead. Returns a new <see cref="Metrics"/>; the current scope
+    /// is unchanged. Must follow a selector: there is nothing to exclude from otherwise.
+    /// </summary>
+    /// <param name="glob">The glob to match the excluded subjects' target part against. Must not be <see langword="null"/> or empty.</param>
+    /// <returns>A new scope with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="glob"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException"><paramref name="glob"/> is empty.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public Metrics Except(string glob)
+    {
+        var pattern = new Pattern(glob);
+        Filter last = LastSelector();
+        return ReplaceLast(last.WithExclusion(new Filter(pattern, last.Target)));
+    }
+
+    /// <summary>
+    /// <c>except</c>: narrows the most recently applied selector by excluding the subjects
+    /// <paramref name="exclusion"/> matches. The exclusion is a fully targeted filter, evaluated
+    /// against the same subject the selector just applied matches — a scope narrowed by
+    /// <c>ForClassesMatching("*Service")</c> and then
+    /// <c>Except(MatcherFactory.Path("*Legacy*"))</c> keeps the classes named <c>*Service</c> but
+    /// not <c>*Legacy*</c>. Returns a new <see cref="Metrics"/>; the current scope is unchanged. Must
+    /// follow a selector: there is nothing to exclude from otherwise.
+    /// </summary>
+    /// <param name="exclusion">The exclusion to add. Must not be <see langword="null"/>.</param>
+    /// <returns>A new scope with the most recently applied selector's exclusion added.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="exclusion"/> is <see langword="null"/>.</exception>
+    /// <exception cref="UserError">No selector has been applied, so there is nothing to exclude from.</exception>
+    public Metrics Except(Filter exclusion)
+    {
+        ArgumentNullException.ThrowIfNull(exclusion);
+        return ReplaceLast(LastSelector().WithExclusion(exclusion));
+    }
+
+    /// <summary>
     /// <c>count</c>: the count-metric section of a rule chain. Returns a new <see cref="CountMetrics"/>;
     /// the current scope is unchanged.
     /// </summary>
@@ -189,7 +242,7 @@ public sealed class Metrics
         var filters = new Filter[_fileFilters.Length + 1];
         Array.Copy(_fileFilters, filters, _fileFilters.Length);
         filters[_fileFilters.Length] = filter;
-        return new Metrics(_graph, filters, _classFilters, _sourceText);
+        return new Metrics(_graph, filters, _classFilters, _sourceText, lastSelectorWasClass: false);
     }
 
     private Metrics AddClass(Filter filter)
@@ -197,7 +250,41 @@ public sealed class Metrics
         var filters = new Filter[_classFilters.Length + 1];
         Array.Copy(_classFilters, filters, _classFilters.Length);
         filters[_classFilters.Length] = filter;
-        return new Metrics(_graph, _fileFilters, filters, _sourceText);
+        return new Metrics(_graph, _fileFilters, filters, _sourceText, lastSelectorWasClass: true);
+    }
+
+    /// <summary>
+    /// The selector <c>except</c> narrows: the most recently applied one, whether a file selector or
+    /// the class selector. There is none before any selector has been applied, which is a misuse of
+    /// the fluent grammar and raises a <see cref="UserError"/> naming the mistake.
+    /// </summary>
+    private Filter LastSelector()
+    {
+        IReadOnlyList<Filter> filters = _lastSelectorWasClass ? _classFilters : _fileFilters;
+        return filters.Count == 0
+            ? throw new UserError(
+                "except must follow a selector (with name, in folder, in path or for classes "
+                + "matching): there is no selector to exclude from.")
+            : filters[^1];
+    }
+
+    /// <summary>
+    /// Returns a new scope whose most recently applied selector is replaced by
+    /// <paramref name="replacement"/>, everything else unchanged. This is how <c>except</c> narrows
+    /// one selector without mutating the scope it was called on.
+    /// </summary>
+    private Metrics ReplaceLast(Filter replacement)
+    {
+        if (_lastSelectorWasClass)
+        {
+            var classFilters = (Filter[])_classFilters.Clone();
+            classFilters[^1] = replacement;
+            return new Metrics(_graph, _fileFilters, classFilters, _sourceText, lastSelectorWasClass: true);
+        }
+
+        var fileFilters = (Filter[])_fileFilters.Clone();
+        fileFilters[^1] = replacement;
+        return new Metrics(_graph, fileFilters, _classFilters, _sourceText, lastSelectorWasClass: false);
     }
 
     /// <summary>
@@ -239,7 +326,8 @@ public sealed class Metrics
 
     /// <summary>
     /// Describes this scope as the subject of a rule, for a report: the entry phrase
-    /// <c>project metrics</c> followed by one clause per selector, in the selector's own words. A scope
+    /// <c>project metrics</c> followed by one clause per selector, in the selector's own words, and
+    /// one <c>except</c> clause per exclusion. A scope
     /// narrowed by <c>WithName("Car.cs")</c> and <c>ForClassesMatching("*.Controller")</c> is described
     /// as <c>project metrics with name 'Car.cs' for classes matching '*.Controller'</c>.
     /// </summary>
@@ -248,11 +336,7 @@ public sealed class Metrics
         var builder = new StringBuilder("project metrics");
         foreach (Filter filter in _fileFilters)
         {
-            builder.Append(' ');
-            builder.Append(SelectorWord(filter.Target));
-            builder.Append(" '");
-            builder.Append(filter.Pattern.Glob);
-            builder.Append('\'');
+            AppendFileSelectorClause(builder, filter);
         }
 
         foreach (Filter filter in _classFilters)
@@ -260,9 +344,36 @@ public sealed class Metrics
             builder.Append(" for classes matching '");
             builder.Append(filter.Pattern.Glob);
             builder.Append('\'');
+            foreach (Filter exclusion in filter.Exclusions)
+            {
+                builder.Append(" except for classes matching '");
+                builder.Append(exclusion.Pattern.Glob);
+                builder.Append('\'');
+            }
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Appends one file selector's clause to a scope description: the selector's own words, the
+    /// pattern's glob, and one <c>except</c> clause per exclusion in the exclusion's own words.
+    /// </summary>
+    private static void AppendFileSelectorClause(StringBuilder builder, Filter filter)
+    {
+        builder.Append(' ');
+        builder.Append(SelectorWord(filter.Target));
+        builder.Append(" '");
+        builder.Append(filter.Pattern.Glob);
+        builder.Append('\'');
+        foreach (Filter exclusion in filter.Exclusions)
+        {
+            builder.Append(" except ");
+            builder.Append(SelectorWord(exclusion.Target));
+            builder.Append(" '");
+            builder.Append(exclusion.Pattern.Glob);
+            builder.Append('\'');
+        }
     }
 
     /// <summary>
