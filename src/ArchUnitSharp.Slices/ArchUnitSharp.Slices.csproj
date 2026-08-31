@@ -10,11 +10,13 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <InternalsVisibleTo Include="ArchUnitSharp.Common.Tests" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Files" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Graph" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Layers" />
-    <InternalsVisibleTo Include="ArchUnitSharp.Slices" />
+    <InternalsVisibleTo Include="ArchUnitSharp.Slices.Tests" />
+    <InternalsVisibleTo Include="ArchUnitSharp" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ArchUnitSharp.Common\ArchUnitSharp.Common.csproj" />
+    <ProjectReference Include="..\ArchUnitSharp.Projection\ArchUnitSharp.Projection.csproj" />
   </ItemGroup>
 
 </Project>

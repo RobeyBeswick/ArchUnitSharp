@@ -1,6 +1,7 @@
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Files;
 using ArchUnitSharp.Layers;
+using ArchUnitSharp.Slices;
 
 namespace ArchUnitSharp.Testing.Tests;
 
@@ -72,6 +73,35 @@ public class ViolationFactoryTests
 
         Assert.Equal(
             "Layer 'App' must not depend on layer 'Models': 'src/App/Program.cs' depends on 'src/Models/Car.cs'.",
+            message);
+    }
+
+    [Fact]
+    public void A_forbidden_dependency_violation_names_the_slice_and_the_dependency()
+    {
+        var violation = new ForbiddenDependencyViolation(
+            "billing",
+            "src/features/billing/order.cs",
+            "src/legacy/Old.cs");
+
+        string message = ViolationFactory.Format(violation);
+
+        Assert.Equal(
+            "Slice 'billing' must not contain a dependency from 'src/features/billing/order.cs' "
+            + "to 'src/legacy/Old.cs'.",
+            message);
+    }
+
+    [Fact]
+    public void A_missing_dependency_violation_names_the_slice_and_the_two_patterns()
+    {
+        var violation = new MissingDependencyViolation("auth", "src/features/billing/**", "src/shared/**");
+
+        string message = ViolationFactory.Format(violation);
+
+        Assert.Equal(
+            "Slice 'auth' must contain a dependency from a file matching 'src/features/billing/**' "
+            + "to a file matching 'src/shared/**'.",
             message);
     }
 

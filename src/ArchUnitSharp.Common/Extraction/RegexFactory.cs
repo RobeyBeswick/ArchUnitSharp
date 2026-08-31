@@ -11,9 +11,10 @@ using System.Text.RegularExpressions;
 /// <para>
 /// The wildcard vocabulary is: <c>*</c> matches any run of characters within one path segment,
 /// <c>**</c> matches any number of path segments (including none), <c>?</c> matches exactly one
-/// character within a segment, and <c>[...]</c> is a character class (<c>[!...]</c> negates it).
-/// Matching is case-sensitive. The whole glob is anchored, so a glob matches a whole candidate, not
-/// a substring of one.
+/// character within a segment, <c>[...]</c> is a character class (<c>[!...]</c> negates it), and
+/// <c>(**)</c> is the capturing form of <c>**</c> — it matches the same text and captures it, which
+/// is how the library's slices are named. Matching is case-sensitive. The whole glob is anchored, so
+/// a glob matches a whole candidate, not a substring of one.
 /// </para>
 /// <para>
 /// Separators are normalised before the glob is compiled: a backslash is treated as the same
@@ -94,6 +95,28 @@ public static class RegexFactory
 
                     pattern.Append(characterClass);
                     i = close + 1;
+                    break;
+
+                case '(':
+                    if (i + 3 < glob.Length && glob[i + 1] == '*' && glob[i + 2] == '*' && glob[i + 3] == ')')
+                    {
+                        if (i + 4 < glob.Length && glob[i + 4] == '/')
+                        {
+                            pattern.Append("((?:[^/]+/)*)");
+                            i += 5;
+                        }
+                        else
+                        {
+                            pattern.Append("(.*)");
+                            i += 4;
+                        }
+                    }
+                    else
+                    {
+                        pattern.Append(Regex.Escape(c.ToString()));
+                        i += 1;
+                    }
+
                     break;
 
                 case '/':

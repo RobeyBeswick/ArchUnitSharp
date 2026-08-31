@@ -1,5 +1,34 @@
 # NOTES
 
+WHY: Issue 30 — the `(**)` capture compiles to a greedy `(.*)` (any, possibly empty, sequence of
+characters, ArchUnit's `..` idiom) rather than the segment-aligned form `**` uses, because the point
+of the capture is the exact text it names a slice with; the capture never includes the separator that
+follows it, and a glob/regex whose capture is empty names no slice, so that file is unsliced. The
+regex factory rejects a `defined by` glob or `defined by regex` pattern with no capture at all as a
+`UserError` — a slice definition that cannot name a slice is a malformed pattern, not a rule outcome.
+
+WHY: Issue 30 — `contain dependency(from, to)` counts a dependency from a *sliced* file matching
+`from` to any file matching `to` (sliced or not, internal only), ArchUnitJava's semantics: the slice
+that "contains" the dependency is the importing file's slice, and a dependency can legitimately leave
+the slicing — the classic rule is "no slice may reach the legacy code", which is not itself sliced.
+The empty-test guard fires when the slicing selects no files, `from` matches no sliced file, or `to`
+matches no file of the graph, so a typo in any of the three is a failure in both moods.
+
+WHY: Issue 30 — the slices module ships as a policy accumulator like the layers module (definitions
+and rules accumulate on `Slices`, checked as a whole with `Check()`), not one terminal per rule like
+the files module, because a slicing is shared state every rule reasons over; and the exported
+"projections for direct use" (`slice by pattern`, `slice by regex`, `slice by file suffix`,
+`identity`) live on a static `Slice` class returning the projection layer's `MapFunction`s, the shape
+the issue's "for direct use" demands without inventing a second projection mechanism.
+
+WHY: Issue 30 — the test critic's proposed external-edge pin for the `Map` projection used
+`Slice.Identity`, but `Identity` re-exports the projection layer's `MapFunctions.Identity`, which does
+not route through `SlicesProjection.Map` and — as the idiom critic's own finding confirms — is
+supposed to keep external edges, so that literal test would fail against correct behaviour. The
+underlying gap is real: `Map`'s `edge.External` drop was untested. It is pinned instead with
+`Slice.ByFileSuffix`, a relabelling projection that routes through `Map` and under which an external
+target ("System.Linq" → suffix ".Linq") would survive `Projection.Edges` if the drop were removed.
+
 WHY: Issue 28 — the query surface ships two kinds of terminal: `Build()` returns the `GraphSnapshot`
 (data, no empty-test guard — an empty snapshot is visible data, not a silent pass), and `Check()`
 implements `ICheckable` and routes an empty scope through the shared `EmptyTestGuard`, honouring the

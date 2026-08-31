@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using ArchUnitSharp.Common.Extraction;
 
 namespace ArchUnitSharp.Common.Tests.Extraction;
@@ -36,6 +37,58 @@ public class RegexFactoryTests
         Assert.Matches(regex, "src/Models/Sub/Car.cs");
         Assert.DoesNotMatch(regex, "Other/Car.cs");
         Assert.DoesNotMatch(regex, "src/ACar.cs");
+    }
+
+    [Fact]
+    public void Parenthesized_double_star_captures_the_segments_between_the_literals()
+    {
+        var regex = RegexFactory.CompileGlob("src/features/(**)/*.cs");
+
+        Assert.Matches(regex, "src/features/billing/order.cs");
+        Assert.Matches(regex, "src/features/a/b/order.cs");
+        Assert.DoesNotMatch(regex, "src/features/billing/order.txt");
+
+        Match billing = regex.Match("src/features/billing/order.cs");
+        Assert.True(billing.Groups[1].Success);
+        Assert.Equal("billing/", billing.Groups[1].Value);
+
+        Match nested = regex.Match("src/features/a/b/order.cs");
+        Assert.Equal("a/b/", nested.Groups[1].Value);
+    }
+
+    [Fact]
+    public void Parenthesized_double_star_at_the_end_captures_the_remainder()
+    {
+        var regex = RegexFactory.CompileGlob("src/features/(**)");
+
+        Match match = regex.Match("src/features/billing/order.cs");
+
+        Assert.True(match.Success);
+        Assert.Equal("billing/order.cs", match.Groups[1].Value);
+    }
+
+    [Fact]
+    public void Parenthesized_double_star_before_a_separator_matches_zero_segments()
+    {
+        var regex = RegexFactory.CompileGlob("src/features/(**)/order.cs");
+
+        Assert.Matches(regex, "src/features/order.cs");
+        Assert.Matches(regex, "src/features/sub/order.cs");
+
+        Match flat = regex.Match("src/features/order.cs");
+        Assert.Equal(string.Empty, flat.Groups[1].Value);
+
+        Match nested = regex.Match("src/features/sub/order.cs");
+        Assert.Equal("sub/", nested.Groups[1].Value);
+    }
+
+    [Fact]
+    public void A_parenthesis_that_is_not_a_capture_is_a_literal_character()
+    {
+        var regex = RegexFactory.CompileGlob("(x)");
+
+        Assert.Matches(regex, "(x)");
+        Assert.DoesNotMatch(regex, "x");
     }
 
     [Fact]

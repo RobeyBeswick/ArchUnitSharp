@@ -2,6 +2,7 @@ using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Extraction;
 using ArchUnitSharp.Files;
 using ArchUnitSharp.Layers;
+using ArchUnitSharp.Slices;
 
 namespace ArchUnitSharp.Tests;
 
@@ -518,6 +519,88 @@ public class ProjectTests
     public void Layers_rejects_a_null_location()
     {
         Assert.Throws<ArgumentNullException>(() => Project.Layers(null!));
+    }
+
+    [Fact]
+    public void ProjectSlices_checks_a_sliced_dependency_rule()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/features/billing/order.cs", "using App.Legacy; namespace App.Features.Billing { public class Order { } }");
+        project.WriteFile("src/legacy/Old.cs", "namespace App.Legacy { public class Old { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectSlices(location)
+            .DefinedBy("src/features/(**)/*.cs")
+            .ShouldNot()
+            .ContainDependency("src/features/**", "src/legacy/**")
+            .Check();
+
+        Assert.Equal(
+            new Violation[]
+            {
+                new ForbiddenDependencyViolation(
+                    "billing",
+                    "src/features/billing/order.cs",
+                    "src/legacy/Old.cs"),
+            },
+            violations);
+    }
+
+    [Fact]
+    public void ProjectSlices_checks_that_no_forbidden_dependency_exists()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/features/billing/order.cs", "namespace App.Features.Billing { public class Order { } }");
+        project.WriteFile("src/legacy/Old.cs", "namespace App.Legacy { public class Old { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectSlices(location)
+            .DefinedBy("src/features/(**)/*.cs")
+            .ShouldNot()
+            .ContainDependency("src/features/**", "src/legacy/**")
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
+    public void Slices_alias_returns_a_policy_like_project_slices()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile("src/features/billing/order.cs", "using App.Legacy; namespace App.Features.Billing { public class Order { } }");
+        project.WriteFile("src/legacy/Old.cs", "namespace App.Legacy { public class Old { } }");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> canonical = Project.ProjectSlices(location)
+            .DefinedBy("src/features/(**)/*.cs")
+            .ShouldNot()
+            .ContainDependency("src/features/**", "src/legacy/**")
+            .Check();
+        IReadOnlyList<Violation> alias = Project.Slices(location)
+            .DefinedBy("src/features/(**)/*.cs")
+            .ShouldNot()
+            .ContainDependency("src/features/**", "src/legacy/**")
+            .Check();
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void ProjectSlices_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.ProjectSlices(null!));
+    }
+
+    [Fact]
+    public void Slices_rejects_a_null_location()
+    {
+        Assert.Throws<ArgumentNullException>(() => Project.Slices(null!));
     }
 
     [Fact]

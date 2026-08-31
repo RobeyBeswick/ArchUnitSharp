@@ -7,14 +7,16 @@ using ArchUnitSharp.Extraction;
 /// The composition root and the DSL's entry points: the noun phrases that begin a rule chain.
 /// <c>project files</c> (alias <c>files</c>) locates a project, extracts its dependency graph and
 /// hands the caller the files module's fluent surface over that graph; <c>project layers</c> (alias
-/// <c>layers</c>) does the same for the layers module; <c>project graph</c> (alias <c>graph</c>) does
-/// the same for the graph module's reports.
+/// <c>layers</c>) does the same for the layers module; <c>project slices</c> (alias <c>slices</c>) does
+/// the same for the slices module; <c>project graph</c> (alias <c>graph</c>) does the same for the
+/// graph module's reports.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Each files entry point returns an immutable <see cref="ArchUnitSharp.Files.Files"/> selection,
-/// each layers entry point returns an immutable <see cref="ArchUnitSharp.Layers.Layers"/> policy and
-/// each graph entry point returns an immutable <see cref="ArchUnitSharp.Graph.GraphReport"/>. The
+/// each layers entry point returns an immutable <see cref="ArchUnitSharp.Layers.Layers"/> policy, each
+/// slices entry point returns an immutable <see cref="ArchUnitSharp.Slices.Slices"/> policy and each
+/// graph entry point returns an immutable <see cref="ArchUnitSharp.Graph.GraphReport"/>. The
 /// parameterless overloads locate the project from the current working directory; the overloads that
 /// take a <see cref="ProjectLocation"/> analyse exactly the located project, which is how a caller
 /// targets a repository other than the current one.
@@ -138,6 +140,42 @@ public static class Project
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
     public static ArchUnitSharp.Graph.GraphReport Graph(ProjectLocation location) => ProjectGraph(location);
+
+    /// <summary>
+    /// <c>project slices</c>: a slicing policy over the project located from the current working
+    /// directory.
+    /// </summary>
+    /// <returns>An empty slices policy over the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Slices.Slices ProjectSlices() => ProjectSlices(ProjectLocator.Locate());
+
+    /// <summary>
+    /// <c>project slices</c>: a slicing policy over exactly the given project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>An empty slices policy over the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Slices.Slices ProjectSlices(ProjectLocation location) =>
+        new ArchUnitSharp.Slices.Slices(GraphCache.Get(location));
+
+    /// <summary>
+    /// <c>slices</c>, the alias of <c>project slices</c>: a slicing policy over the project located
+    /// from the current working directory.
+    /// </summary>
+    /// <returns>An empty slices policy over the located project.</returns>
+    /// <exception cref="TechnicalError">No <c>.sln</c> or <c>.csproj</c> exists at or above the current working directory, or the project cannot be read.</exception>
+    public static ArchUnitSharp.Slices.Slices Slices() => ProjectSlices();
+
+    /// <summary>
+    /// <c>slices</c>, the alias of <c>project slices</c>: a slicing policy over exactly the given
+    /// project.
+    /// </summary>
+    /// <param name="location">The project to analyse, as produced by <see cref="ProjectLocator.Locate()"/>. Must not be <see langword="null"/>.</param>
+    /// <returns>An empty slices policy over the located project.</returns>
+    /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
+    /// <exception cref="TechnicalError">The project cannot be read.</exception>
+    public static ArchUnitSharp.Slices.Slices Slices(ProjectLocation location) => ProjectSlices(location);
 
     /// <summary>
     /// The source-text provider's disk half: reads one file's full text, given its project-relative

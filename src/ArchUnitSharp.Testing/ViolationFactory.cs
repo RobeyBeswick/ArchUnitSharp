@@ -3,6 +3,7 @@ namespace ArchUnitSharp.Testing;
 using ArchUnitSharp.Common.Extraction;
 using ArchUnitSharp.Files;
 using ArchUnitSharp.Layers;
+using ArchUnitSharp.Slices;
 
 /// <summary>
 /// The single place a <see cref="Violation"/> becomes a human-readable message: given a violation's
@@ -18,8 +19,10 @@ using ArchUnitSharp.Layers;
 /// turns it into the report sentence. The concrete subtypes the library defines today are each
 /// handled — <see cref="EmptyTestViolation"/>, <see cref="FileViolation"/>,
 /// <see cref="AdhereToViolation"/>, <see cref="DependencyViolation"/>,
-/// <see cref="CycleViolation"/> and <see cref="LayerViolation"/> — and a violation subtype this
-/// factory does not know is a defect, so it throws rather than fabricate a message.
+/// <see cref="CycleViolation"/>, <see cref="LayerViolation"/>,
+/// <see cref="ForbiddenDependencyViolation"/> and <see cref="MissingDependencyViolation"/> — and a
+/// violation subtype this factory does not know is a defect, so it throws rather than fabricate a
+/// message.
 /// </para>
 /// <para>
 /// This type is stateless and safe for concurrent use; the strings it returns are freshly built on
@@ -47,6 +50,10 @@ public static class ViolationFactory
             CycleViolation v => $"Cycle: {v.Path}",
             LayerViolation v =>
                 $"Layer '{v.SourceLayer}' must not depend on layer '{v.TargetLayer}': '{v.Source}' depends on '{v.Target}'.",
+            ForbiddenDependencyViolation v =>
+                $"Slice '{v.Slice}' must not contain a dependency from '{v.Source}' to '{v.Target}'.",
+            MissingDependencyViolation v =>
+                $"Slice '{v.Slice}' must contain a dependency from a file matching '{v.From}' to a file matching '{v.To}'.",
             _ => throw new ArgumentOutOfRangeException(
                 nameof(violation),
                 violation,
