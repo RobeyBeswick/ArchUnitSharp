@@ -1,5 +1,17 @@
 # NOTES
 
+WHY: Issue 42 — the docs site is built with DocFX, the .NET equivalent of the siblings' source-generated
+reference sites (YARD for ArchUnitRuby, TypeDoc for ArchUnitTS): the same information architecture of a
+guide plus a searchable, source-generated API reference, generated from the projects' XML doc comments
+and deployed to GitHub Pages from `main` by `.github/workflows/docs.yml`. The generated `docs/api/` and
+`docs/_site/` directories are gitignored, so the API reference is never hand-maintained and the guide
+is the only committed content; the site build is verified by the workflow itself (and locally with
+`docfx docs/docfx.json`), and the issue adds no library code, so there are no new unit tests to write.
+The workflow's deploy steps require the repository's Pages source to be set to "GitHub Actions" (a repo
+setting, not code). The site's guide is a multi-page expansion of the README's information architecture
+(one page per module plus grammar, testing/configuration and limitations), and the README now links to
+the site as the siblings' do.
+
 WHY: Test-critic round 6, Issue 39 — the proposed `BeInPath("src/Models")` logging test is added with
 the glob widened to `"src/Models/*.cs"`: a Path-target glob is anchored (`RegexFactory` compiles `^…$`),
 so `src/Models` matches the whole identifier only and can never match `src/Models/Car.cs` — the rule

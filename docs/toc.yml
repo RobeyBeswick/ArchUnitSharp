@@ -1,0 +1,24 @@
+- name: Home
+  href: index.md
+- name: Guide
+  items:
+    - name: Getting started
+      href: guide/getting-started.md
+    - name: The fluent grammar
+      href: guide/fluent-grammar.md
+    - name: Files
+      href: guide/files.md
+    - name: Layers
+      href: guide/layers.md
+    - name: Slices
+      href: guide/slices.md
+    - name: Graph
+      href: guide/graph.md
+    - name: Metrics
+      href: guide/metrics.md
+    - name: Testing and configuration
+      href: guide/testing.md
+    - name: Limitations
+      href: guide/limitations.md
+- name: API reference
+  href: api/ArchUnitSharp.yml

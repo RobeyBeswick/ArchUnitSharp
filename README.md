@@ -15,6 +15,9 @@ This repository is being built from scratch, issue by issue, by the
 [ArchUnitDev](https://github.com/RobeyBeswick/ArchUnitDev) loop. The conventions it builds against are
 in [AGENTS.md](AGENTS.md).
 
+The full documentation — this guide plus a searchable, source-generated API reference for every
+public module, class and method — lives on the [documentation site](https://robeybeswick.github.io/ArchUnitSharp/).
+
 ## Requirements
 
 - The .NET 10 SDK (every project targets `net10.0`).

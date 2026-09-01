@@ -1,0 +1,36 @@
+{
+  "$schema": "https://dotnet.github.io/docfx/schemas/docfx.schema.json",
+  "metadata": [
+    {
+      "src": [
+        {
+          "src": "..",
+          "files": ["src/**/*.csproj"],
+          "exclude": ["**/bin/**", "**/obj/**"]
+        }
+      ],
+      "dest": "api",
+      "properties": {
+        "TargetFramework": "net10.0"
+      }
+    }
+  ],
+  "build": {
+    "content": [
+      { "files": ["*.md", "**/*.md"], "exclude": ["_site/**"] },
+      { "files": ["*.yml", "**/*.yml"], "exclude": ["_site/**", "api/toc.yml"] }
+    ],
+    "resource": [
+      { "files": ["**/*.png", "**/*.jpg", "**/*.jpeg", "**/*.gif", "**/*.svg"], "exclude": ["_site/**"] }
+    ],
+    "globalMetadata": {
+      "_appTitle": "ArchUnitSharp",
+      "_appFooter": "ArchUnitSharp — architecture testing for C# and .NET",
+      "_enableSearch": true,
+      "_disableContribution": true
+    },
+    "dest": "_site",
+    "template": ["default"],
+    "theme": "default"
+  }
+}

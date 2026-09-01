@@ -5,3 +5,5 @@ TestResults/
 *.suo
 .vs/
 .idea/
+docs/_site/
+docs/api/
