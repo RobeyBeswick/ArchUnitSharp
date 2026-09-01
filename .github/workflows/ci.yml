@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore ArchUnitSharp.sln
+
+      - name: Build
+        run: dotnet build ArchUnitSharp.sln --no-restore
+
+      - name: Lint
+        run: dotnet format ArchUnitSharp.sln --verify-no-changes --no-restore
+
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore ArchUnitSharp.sln
+
+      - name: Build
+        run: dotnet build ArchUnitSharp.sln --no-restore
+
+      - name: Run the test suite
+        run: dotnet test ArchUnitSharp.sln --no-restore
+
+  dogfood:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Restore
+        run: dotnet restore ArchUnitSharp.sln
+
+      - name: Build
+        run: dotnet build ArchUnitSharp.sln --no-restore
+
+      - name: Run the dogfooding architecture tests
+        run: dotnet test tests/ArchUnitSharp.Dogfood.Tests --no-restore

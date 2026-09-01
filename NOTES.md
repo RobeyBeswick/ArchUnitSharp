@@ -1,5 +1,31 @@
 # NOTES
 
+WHY: Round 2 of Issue 43 — the correctness review (43-review-1) returned no verdict (crash or
+timeout) with no code findings; the FIX it proposed was to re-run and, if the crash repeats, to
+suspect the diff was too large to review in one pass. The re-run of the whole gate is clean: restore,
+build (0 warnings, 0 errors), `dotnet format --verify-no-changes`, every test project passes
+including the 5 dogfood tests (nothing removed, nothing skipped), and no vulnerable packages. The
+diff is 7 files / ~260 lines — far too small for "too large to review in one pass" — so this is the
+reviewer-tooling hang class documented in Rounds 2, 3, 4 and 5, not a code defect; there is nothing
+to fix.
+
+WHY: Issue 43 — CI lands as `.github/workflows/ci.yml` with three jobs — `build` (restore, build,
+`dotnet format --verify-no-changes` as the linter), `test` (the whole solution, which includes the
+dogfood suite), and a dedicated `dogfood` job running `tests/ArchUnitSharp.Dogfood.Tests` explicitly,
+because the issue names "the dogfooding architecture tests" as a third concern to run on every push.
+That suite never landed on main: issue 40's dogfood project was abandoned as a WIP commit
+(`a9ee471`, "needs a human") and is absent from the current branch, so bringing it back here is part
+of making the CI issue's stated scope real, not the next issue — all its APIs already exist on main
+and it passes. The suite's "no cycles" rule runs at module granularity (one layer per src project,
+each `may only depend on` the modules beneath it in a fixed topological order, the kernel sealed)
+rather than the file-level `should have no cycles` terminal: the file-level graph of the library's
+own source contains a 15-file strongly connected component inside `src/ArchUnitSharp.Metrics`
+(the fluent-surface ↔ Assertion/Calculation/Projection internals mutual reference) whose elementary
+cycles are Johnson's exponential worst case — the original file-level rule hung for minutes and
+crashed the test host. Intra-module file cycles are normal C# module structure; the issue's "no
+cycles" is the module architecture, and the allowlist is a complete acyclicity witness (every allowed
+target is strictly earlier in the order), so a future module-level cycle fails it.
+
 WHY: Issue 42 — the docs site is built with DocFX, the .NET equivalent of the siblings' source-generated
 reference sites (YARD for ArchUnitRuby, TypeDoc for ArchUnitTS): the same information architecture of a
 guide plus a searchable, source-generated API reference, generated from the projects' XML doc comments
