@@ -1,5 +1,65 @@
 # NOTES
 
+## Issue 45 — root-cause summary
+
+The suite was already green on this repository's single Linux runner, and remains so. The two code
+changes the previous round made — rewriting the `PlantUmlRendererTests` expectation from an idiomatic
+raw string literal to explicit `\n` concatenation, and routing the metrics count/custom `int`
+thresholds through `CultureInfo.InvariantCulture` — were both churn based on false premises, and the
+first is reverted to the original idiomatic raw string literal.
+
+The `PlantUmlRendererTests` expectation `"""…@enduml""" + "\n"` already matched the renderer's single
+trailing `\n`: a C# 11 raw string literal does *not* include a trailing newline before the closing
+`"""` (the closing delimiter sits on its own line, so the last content line is `@enduml`), and the
+explicit `+ "\n"` supplies exactly the renderer's one trailing newline. The previous round rewrote
+the same string as explicit `\n` concatenation and added `.gitattributes` on the false premise that a
+CRLF checkout embeds CRLF into a raw string literal; it does not — raw string literals normalise
+every source line break to `\n` regardless of the file's line endings, so no raw-string expectation
+can be broken by checkout translation. `.gitattributes` remains only as a general line-ending
+normalisation for a uniform tree.
+
+The metrics `int`-threshold `InvariantCulture` change is kept (the cohesion and distance siblings
+already use it, so it is the consistent form), but it is a no-op: in .NET, `int.ToString()` never
+depends on the current culture — it neither substitutes digit glyphs (no `ar-SA`/`hi-IN`/`fa-IR`
+renders non-ASCII digits) nor applies grouping under the default "G" format — so `ToString()` and
+`ToString(CultureInfo.InvariantCulture)` are identical under every culture, and no test can
+distinguish them.
+
+The CI `test` gate now runs on `windows-latest`, `ubuntu-latest` and `macos-latest` so the matrix the
+issue names is enforced on every push. Everything else the audit covered was already platform-safe:
+identifiers are `/`-normalised everywhere, renderers and the logger emit a single fixed newline
+convention with `File.ReadAllText`/`WriteAllText` on both sides, enumeration is sorted, and the
+symlink-hazard tests already early-return on Windows.
+
+WHY: The correctness reviewer's premise that the PlantUML expectation carried an extra trailing
+newline (`@enduml\n\n` vs the renderer's `@enduml\n`) and was therefore red on Linux is rejected on
+empirical grounds: a raw string literal does not end with a newline before the closing `"""`, so the
+original `"""…""" + "\n"` produced exactly the renderer's `@enduml\n` and the test was already green
+on Linux. The "extra newline" only appears if you misread raw-string literal semantics. There was no
+platform-independent newline defect to fix; the PlantUML edit is restored to its prior, already-correct
+form.
+
+WHY: The test critic's demand for a test that sets `CultureInfo.CurrentCulture` to `ar-SA` and asserts
+the count/custom rule description still contains ASCII "20" is rejected: it cannot work, so adding it
+would be a decoration test (AGENTS.md: "a test no mutation breaks is decoration"). Verified
+empirically on this runtime that `int.ToString()` under `ar-SA`, `ar-EG`, `fa-IR`, `hi-IN`, `bn-BD`,
+`mr-IN`, `ne-NP`, `ur-PK`, `pa-IN`, `de-DE`, `fr-FR` and a custom `NativeDigits`/`DigitSubstitution`
+culture all render "20" (and even `1234567` without grouping), identical to the invariant form —
+.NET's `int` formatting neither substitutes digit glyphs nor applies grouping under the default "G"
+format. Because `ToString()` and `ToString(CultureInfo.InvariantCulture)` are indistinguishable for an
+`int` under every culture, no test can guard the change, and the `InvariantCulture` argument is
+retained purely as the sibling-consistent, intent-documenting form.
+
+WHY: The issue's "latest observed run" and its 622-test / net8 numbers belong to the sibling
+ArchUnitNET repo and do not match this repository (net10.0, ~1850 tests). The issue is implemented as:
+enforce the matrix the issue names as the CI gate and remove the churn the previous round introduced on
+false premises. Nothing was deleted, skipped or weakened.
+
+WHY: The issue's "the release workflow retains the test gate" is vacuous here — this repository has
+no release workflow, only `ci.yml` and `docs.yml` — and no changelog file exists, so the "README and
+changelog" clause is vacuous too: no public member changed (the fix is internal formatting plus a new
+test), so the README stays accurate as-is.
+
 WHY: Round 2 of Issue 43 — the correctness review (43-review-1) returned no verdict (crash or
 timeout) with no code findings; the FIX it proposed was to re-run and, if the crash repeats, to
 suspect the diff was too large to review in one pass. The re-run of the whole gate is clean: restore,

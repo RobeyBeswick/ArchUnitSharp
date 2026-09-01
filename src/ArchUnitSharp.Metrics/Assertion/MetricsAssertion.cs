@@ -666,7 +666,7 @@ internal static class MetricsAssertion
         builder.Append(' ');
         builder.Append(ComparisonWords(rule.Comparison!.Value));
         builder.Append(' ');
-        builder.Append(rule.Threshold!.Value);
+        builder.Append(rule.Threshold!.Value.ToString(CultureInfo.InvariantCulture));
         return builder.ToString();
     }
 
@@ -692,7 +692,7 @@ internal static class MetricsAssertion
         builder.Append(' ');
         builder.Append(ComparisonWords(rule.Comparison!.Value));
         builder.Append(' ');
-        builder.Append(rule.Threshold!.Value);
+        builder.Append(rule.Threshold!.Value.ToString(CultureInfo.InvariantCulture));
         return builder.ToString();
     }
 

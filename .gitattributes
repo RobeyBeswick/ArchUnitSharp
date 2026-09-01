@@ -1,0 +1,16 @@
+# Normalise line endings on every checkout, whatever the platform or a contributor's core.autocrlf
+# setting, so the tree is consistent across the matrix. C# 11 raw string literals normalise every
+# source line break to \n regardless of the file's line endings, so this pinning is about a uniform
+# tree, not about protecting test expectations from a CRLF checkout. `text=auto` marks the remaining
+# text files text; the explicit `eol=lf` entries pin the build- and test-relevant ones.
+* text=auto
+*.cs text eol=lf
+*.csproj text eol=lf
+*.sln text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.json text eol=lf
+*.editorconfig text eol=lf
+*.gitignore text eol=lf
