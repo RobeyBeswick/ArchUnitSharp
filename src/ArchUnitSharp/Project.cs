@@ -18,7 +18,9 @@ using ArchUnitSharp.Extraction;
 /// each layers entry point returns an immutable <see cref="ArchUnitSharp.Layers.Layers"/> policy, each
 /// slices entry point returns an immutable <see cref="ArchUnitSharp.Slices.Slices"/> policy, each
 /// graph entry point returns an immutable <see cref="ArchUnitSharp.Graph.GraphReport"/> and each
-/// metrics entry point returns an immutable <see cref="ArchUnitSharp.Metrics.Metrics"/> scope. The
+/// metrics entry point returns an immutable <see cref="ArchUnitSharp.Metrics.Metrics"/> scope —
+/// except the type-scoped <c>Metrics&lt;T&gt;()</c> / <c>ProjectMetrics&lt;T&gt;()</c> forms, which
+/// reject the call with a <see cref="UserError"/> until type extraction is supported. The
 /// parameterless overloads locate the project from the current working directory; the overloads that
 /// take a <see cref="ProjectLocation"/> analyse exactly the located project, which is how a caller
 /// targets a repository other than the current one.
@@ -215,6 +217,49 @@ public static class Project
     /// <exception cref="ArgumentNullException"><paramref name="location"/> is <see langword="null"/>.</exception>
     /// <exception cref="TechnicalError">The project cannot be read.</exception>
     public static ArchUnitSharp.Metrics.Metrics Metrics(ProjectLocation location) => ProjectMetrics(location);
+
+    /// <summary>
+    /// <c>project metrics&lt;T&gt;</c>: the type-scoped form of <see cref="ProjectMetrics()"/> — a
+    /// metric rule over the single class <typeparamref name="T"/>. Not supported yet: extracting a
+    /// class's metric facts from a runtime <see cref="Type"/> is not implemented, so this entry point
+    /// always rejects the call with a <see cref="UserError"/> naming the type and the file-scoped
+    /// alternative — <see cref="ProjectMetrics()"/> with
+    /// <see cref="ArchUnitSharp.Metrics.Metrics.ForClassesMatching(string)"/> — instead of silently
+    /// measuring nothing.
+    /// </summary>
+    /// <typeparam name="T">The class a rule would measure. Must be a class.</typeparam>
+    /// <returns>Never returns: the call is always rejected.</returns>
+    /// <exception cref="UserError">Always raised: type-based metric extraction is not yet supported.</exception>
+    public static ArchUnitSharp.Metrics.Metrics ProjectMetrics<T>() where T : class =>
+        throw UnsupportedTypeMetric(typeof(T));
+
+    /// <summary>
+    /// <c>metrics&lt;T&gt;</c>, the alias of <c>project metrics&lt;T&gt;</c>: the type-scoped form of
+    /// <see cref="Metrics()"/>. Not supported yet, exactly like <see cref="ProjectMetrics{T}()"/>: the
+    /// call always rejects with a <see cref="UserError"/> naming the type and the file-scoped
+    /// alternative instead of silently measuring nothing.
+    /// </summary>
+    /// <typeparam name="T">The class a rule would measure. Must be a class.</typeparam>
+    /// <returns>Never returns: the call is always rejected.</returns>
+    /// <exception cref="UserError">Always raised: type-based metric extraction is not yet supported.</exception>
+    public static ArchUnitSharp.Metrics.Metrics Metrics<T>() where T : class =>
+        ProjectMetrics<T>();
+
+    /// <summary>
+    /// The <see cref="UserError"/> a type-scoped metrics entry point raises. Type extraction is not
+    /// implemented, so the call is rejected rather than silently measuring nothing — the false-green a
+    /// metric rule over an unpopulated class extractor would otherwise be. The message names the type
+    /// and the file-scoped alternative that selects the type's source file.
+    /// </summary>
+    /// <param name="type">The type a rule would measure. Must not be <see langword="null"/>.</param>
+    /// <returns>The rejection error naming the type and the file-scoped alternative.</returns>
+    private static UserError UnsupportedTypeMetric(Type type) =>
+        new(
+            $"Metrics<{type.Name}>() is not supported: extracting a class's metric facts from a "
+            + "runtime type is not implemented, so this call rejects rather than silently measuring "
+            + "nothing. Select the class's source file instead — "
+            + $"Project.Metrics().ForClassesMatching(\"*.{type.Name}\") — to run the rule over the "
+            + "real extracted facts.");
 
     /// <summary>
     /// The source-text provider's disk half: reads one file's full text, given its project-relative

@@ -9,7 +9,9 @@ against a threshold. The scope is the same file selection as the files module (`
 `InFolder`, `InPath`, each with `except`), plus `ForClassesMatching(glob)`, which keeps the files
 that declare at least one class whose fully qualified name matches. A class-level metric's subjects
 are the matching classes; a file-level metric's subjects are the files that contain one, measured
-whole.
+whole. There is no type-scoped `Metrics<T>()` form: extracting a class's facts from a runtime type
+is not implemented, so such a call is rejected with a `UserError` naming the type — select the
+class's source file with `ForClassesMatching` instead.
 
 ```csharp
 Project.Metrics()

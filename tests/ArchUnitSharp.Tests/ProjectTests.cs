@@ -980,6 +980,33 @@ public class ProjectTests
     }
 
     [Fact]
+    public void ProjectMetrics_checks_an_lcom_rule_passes_for_a_cohesive_class()
+    {
+        using var project = new TempProject();
+        project.WriteFile("App.sln", "");
+        project.WriteFile(
+            "src/App/Cohesive.cs",
+            "namespace App;\n" +
+            "public class Cohesive\n" +
+            "{\n" +
+            "    private int _a;\n" +
+            "    private int _b;\n" +
+            "    public void A() { _a = 1; _b = 2; }\n" +
+            "    public void B() { _a = 3; }\n" +
+            "}\n");
+
+        var location = ProjectLocator.Locate(project.Root);
+
+        IReadOnlyList<Violation> violations = Project.ProjectMetrics(location)
+            .Lcom()
+            .Lcom4()
+            .ShouldBe(1)
+            .Check();
+
+        Assert.Empty(violations);
+    }
+
+    [Fact]
     public void ProjectMetrics_guards_an_lcom_rule_that_matches_nothing()
     {
         using var project = new TempProject();
@@ -1033,5 +1060,48 @@ public class ProjectTests
     public void Metrics_rejects_a_null_location()
     {
         Assert.Throws<ArgumentNullException>(() => Project.Metrics(null!));
+    }
+
+    [Fact]
+    public void ProjectMetrics_of_type_rejects_the_call_instead_of_measuring_nothing()
+    {
+        var error = Assert.Throws<UserError>(() => Project.ProjectMetrics<OrderService>());
+
+        Assert.Contains("OrderService", error.Message);
+        Assert.Contains("ForClassesMatching", error.Message);
+    }
+
+    [Fact]
+    public void Metrics_of_type_alias_raises_the_same_rejection()
+    {
+        string canonical = Assert.Throws<UserError>(() => Project.ProjectMetrics<OrderService>()).Message;
+        string alias = Assert.Throws<UserError>(() => Project.Metrics<OrderService>()).Message;
+
+        Assert.Equal(canonical, alias);
+    }
+
+    [Fact]
+    public void A_type_scoped_call_rejects_before_locating_any_project()
+    {
+        using var empty = new TempProject();
+        string original = Environment.CurrentDirectory;
+        try
+        {
+            Environment.CurrentDirectory = empty.Root;
+
+            Assert.Throws<UserError>(() => Project.ProjectMetrics<OrderService>());
+        }
+        finally
+        {
+            Environment.CurrentDirectory = original;
+        }
+    }
+
+    /// <summary>
+    /// A fixture class for the type-scoped metrics entry points: the "target type" a
+    /// <c>Metrics&lt;OrderService&gt;()</c> rule would measure if type extraction existed.
+    /// </summary>
+    private sealed class OrderService
+    {
     }
 }

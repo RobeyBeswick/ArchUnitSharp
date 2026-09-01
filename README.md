@@ -194,6 +194,10 @@ HTML report: `export as html(path)`.
   diagram` (slices) have no `should not` form.
 - **No `functions` count metric.** C# has no file-level function distinct from a type member, so the
   metric the siblings carry is skipped rather than faked.
+- **`Metrics<T>()` is not supported.** The type-scoped entry points (`Project.Metrics<T>()` /
+  `Project.ProjectMetrics<T>()`) are not implemented and reject the call with a `UserError` naming the
+  type, so a rule written against a type can never silently pass without measuring it. Measure a
+  class's source file instead: `Project.Metrics().ForClassesMatching("*.OrderService")`.
 - **`except` is limited.** It narrows the files and metrics selectors and the depend-on objects;
   layer definitions, slice definitions and graph report options do not take it.
 - **The graph is an import graph.** Dependencies are the project's `using` directives resolved

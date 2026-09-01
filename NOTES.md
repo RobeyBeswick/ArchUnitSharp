@@ -1,5 +1,28 @@
 # NOTES
 
+## Issue 46 — type-scoped metrics
+
+ArchUnitSharp has no `Metrics<T>()` — the issue's false-green (a `Metrics<T>()` that builds an empty
+`ClassInfoBatchExtractor` and returns an empty violation list) exists only in the sibling repos; this
+repo's metrics surface is file-scoped (`Project.Metrics()` + `ForClassesMatching`), which already
+routes every empty selection through the shared `EmptyTestGuard`. The issue is implemented as the
+sanctioned second branch of its acceptance criterion: the type-scoped entry points
+`Project.Metrics<T>()` / `Project.ProjectMetrics<T>()` are added (the forward-compatible shape a
+future type-extraction issue fills in) and they reject the call with a clear `UserError` naming the
+type and the file-scoped alternative, so a rule written against a type can never silently pass. The
+rejection is at call time and never reaches the graph, so no option (including
+`CheckOptions.AllowEmptyTests`) can turn it into a pass. End-to-end proof of real extraction stays on
+the file-scoped surface, which already has both high- and low-cohesion/count fixtures proving passing
+and failing outcomes; a passing LCOM rule through the public `Project` surface was the one missing
+end-to-end case and is added.
+
+WHY: Type extraction from a runtime `System.Type` is not implemented and cannot faithfully be, because
+the LCOM metrics depend on method-to-field access facts that live in the method *bodies* — invisible
+to reflection without IL decompilation (an unsanctioned dependency). The issue's own acceptance
+criterion sanctions rejecting the call "until type extraction is supported", so the coherent whole is
+the rejecting entry point plus the tests and prose, not a reflection approximation that would silently
+fabricate zero field-access facts and reproduce the very false-green this issue exists to prevent.
+
 ## Issue 45 — root-cause summary
 
 The suite was already green on this repository's single Linux runner, and remains so. The two code
