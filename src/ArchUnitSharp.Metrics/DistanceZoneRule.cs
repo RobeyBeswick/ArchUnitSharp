@@ -48,7 +48,7 @@ internal sealed class DistanceZoneRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        Assertion.MetricsAssertion.CheckZone(this, options);
+        CheckLogging.Run(options, logger => Assertion.MetricsAssertion.CheckZone(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

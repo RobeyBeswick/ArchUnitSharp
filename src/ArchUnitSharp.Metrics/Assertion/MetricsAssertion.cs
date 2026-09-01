@@ -42,6 +42,14 @@ using LcomCalculation = ArchUnitSharp.Metrics.Calculation.LcomMetrics;
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
 /// </para>
+/// <para>
+/// Each assertion is handed the check's <see cref="CheckLogger"/> by the terminal that calls it and
+/// emits the fixed logging vocabulary: the rule being checked starts on entry, the number of files
+/// and subjects the scope selected is progress, every measured metric is logged with its value, and
+/// every violation the rule reports is logged as it is produced. The logger only buffers lines — the
+/// assertion never touches the filesystem — and the terminal's wrapper records the check's end and
+/// flushes the log after the assertion returns.
+/// </para>
 /// </remarks>
 internal static class MetricsAssertion
 {
@@ -51,19 +59,30 @@ internal static class MetricsAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
-    public static IReadOnlyList<Violation> Check(MetricRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> Check(
+        MetricRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeRule(rule);
+        logger.StartCheck(description);
 
         Metrics scope = rule.Scope;
         IReadOnlyList<string> selected = MetricsProjection.SelectFiles(scope.Graph, scope.FileFilters);
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<FileInfo> files = selected
@@ -75,23 +94,29 @@ internal static class MetricsAssertion
             IReadOnlyList<ClassInfo> subjects = MetricsProjection.SelectClasses(files, scope.ClassFilters);
             if (subjects.Count == 0)
             {
-                return EmptyTestGuard.Guard(DescribeRule(rule), options);
+                IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+                logger.Violations(empty);
+                return empty;
             }
 
+            logger.Progress($"measured {subjects.Count} class(es)");
             return rule.Predicate is not null
-                ? CheckPredicate(rule, subjects)
-                : CheckThreshold(rule, subjects);
+                ? CheckPredicate(rule, subjects, logger)
+                : CheckThreshold(rule, subjects, logger);
         }
 
         IReadOnlyList<FileInfo> fileSubjects = MetricsProjection.SelectFileSubjects(files, scope.ClassFilters);
         if (fileSubjects.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
+        logger.Progress($"measured {fileSubjects.Count} file(s)");
         return rule.Predicate is not null
-            ? CheckPredicate(rule, fileSubjects)
-            : CheckThreshold(rule, fileSubjects);
+            ? CheckPredicate(rule, fileSubjects, logger)
+            : CheckThreshold(rule, fileSubjects, logger);
     }
 
     /// <summary>
@@ -101,19 +126,30 @@ internal static class MetricsAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
-    public static IReadOnlyList<Violation> Check(CustomMetricRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> Check(
+        CustomMetricRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeCustomRule(rule);
+        logger.StartCheck(description);
 
         Metrics scope = rule.Scope;
         IReadOnlyList<string> selected = MetricsProjection.SelectFiles(scope.Graph, scope.FileFilters);
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeCustomRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<FileInfo> files = selected
@@ -123,12 +159,15 @@ internal static class MetricsAssertion
         IReadOnlyList<ClassInfo> subjects = MetricsProjection.SelectClasses(files, scope.ClassFilters);
         if (subjects.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeCustomRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
+        logger.Progress($"measured {subjects.Count} class(es)");
         return rule.Predicate is not null
-            ? CheckCustomPredicate(rule, subjects)
-            : CheckCustomThreshold(rule, subjects);
+            ? CheckCustomPredicate(rule, subjects, logger)
+            : CheckCustomThreshold(rule, subjects, logger);
     }
 
     /// <summary>
@@ -138,19 +177,30 @@ internal static class MetricsAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
-    public static IReadOnlyList<Violation> CheckLcom(LcomMetricRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> CheckLcom(
+        LcomMetricRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeLcomRule(rule);
+        logger.StartCheck(description);
 
         Metrics scope = rule.Scope;
         IReadOnlyList<string> selected = MetricsProjection.SelectFiles(scope.Graph, scope.FileFilters);
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeLcomRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<FileInfo> files = selected
@@ -160,12 +210,15 @@ internal static class MetricsAssertion
         IReadOnlyList<ClassInfo> subjects = MetricsProjection.SelectClasses(files, scope.ClassFilters);
         if (subjects.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeLcomRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
+        logger.Progress($"measured {subjects.Count} class(es)");
         return rule.Predicate is not null
-            ? CheckLcomPredicate(rule, subjects)
-            : CheckLcomThreshold(rule, subjects);
+            ? CheckLcomPredicate(rule, subjects, logger)
+            : CheckLcomThreshold(rule, subjects, logger);
     }
 
     /// <summary>
@@ -176,22 +229,33 @@ internal static class MetricsAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
-    public static IReadOnlyList<Violation> CheckDistance(DistanceMetricRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> CheckDistance(
+        DistanceMetricRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeDistanceRule(rule);
+        logger.StartCheck(description);
 
         IReadOnlyList<DistanceInfo> subjects = DistanceSubjects(rule.Scope);
         if (subjects.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeDistanceRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
+        logger.Progress($"measured {subjects.Count} file(s)");
         return rule.Predicate is not null
-            ? CheckDistancePredicate(rule, subjects)
-            : CheckDistanceThreshold(rule, subjects);
+            ? CheckDistancePredicate(rule, subjects, logger)
+            : CheckDistanceThreshold(rule, subjects, logger);
     }
 
     /// <summary>
@@ -202,20 +266,32 @@ internal static class MetricsAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="rule"/>'s scope was built without a source provider, so a selected file's text is unavailable.</exception>
-    public static IReadOnlyList<Violation> CheckZone(DistanceZoneRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> CheckZone(
+        DistanceZoneRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeZoneRule(rule);
+        logger.StartCheck(description);
 
         IReadOnlyList<DistanceInfo> subjects = DistanceSubjects(rule.Scope);
         if (subjects.Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeZoneRule(rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
-        return subjects
+        logger.Progress($"measured {subjects.Count} file(s)");
+
+        Violation[] violations = subjects
             .Where(info => DistanceCalculation.InZone(info, rule.Zone))
             .Select(info => (Violation)new DistanceZoneViolation(
                 info.File,
@@ -223,169 +299,291 @@ internal static class MetricsAssertion
                 DistanceCalculation.ValueOf(DistanceCalculation.Abstractness(), info),
                 DistanceCalculation.ValueOf(DistanceCalculation.Instability(), info)))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 
-    private static IReadOnlyList<Violation> CheckThreshold(MetricRule rule, IReadOnlyList<ClassInfo> subjects)
+    private static IReadOnlyList<Violation> CheckThreshold(
+        MetricRule rule,
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
     {
         MetricComparison comparison = rule.Comparison!.Value;
         int threshold = rule.Threshold!.Value;
+        string metric = MetricWords.Count(rule.Metric.Kind);
 
-        return subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: CountMetricCalculation.ValueOf(rule.Metric, classInfo)))
-            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
-            .Select(pair => (Violation)new MetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Kind,
-                pair.Value,
-                comparison,
-                threshold))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            int value = CountMetricCalculation.ValueOf(rule.Metric, classInfo);
+            logger.Metric($"{metric} of {classInfo.Name}", value);
+            if (!SatisfiesThreshold(comparison, value, threshold))
+            {
+                violations.Add(new MetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Kind,
+                    value,
+                    comparison,
+                    threshold));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
     }
 
-    private static IReadOnlyList<Violation> CheckThreshold(MetricRule rule, IReadOnlyList<FileInfo> subjects)
+    private static IReadOnlyList<Violation> CheckThreshold(
+        MetricRule rule,
+        IReadOnlyList<FileInfo> subjects,
+        CheckLogger logger)
     {
         MetricComparison comparison = rule.Comparison!.Value;
         int threshold = rule.Threshold!.Value;
+        string metric = MetricWords.Count(rule.Metric.Kind);
 
-        return subjects
-            .Select(file => (File: file, Value: CountMetricCalculation.ValueOf(rule.Metric, file)))
-            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
-            .Select(pair => (Violation)new MetricViolation(
-                pair.File.Path,
-                null,
-                rule.Metric.Kind,
-                pair.Value,
-                comparison,
-                threshold))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (FileInfo file in subjects)
+        {
+            int value = CountMetricCalculation.ValueOf(rule.Metric, file);
+            logger.Metric($"{metric} of {file.Path}", value);
+            if (!SatisfiesThreshold(comparison, value, threshold))
+            {
+                violations.Add(new MetricViolation(
+                    file.Path,
+                    null,
+                    rule.Metric.Kind,
+                    value,
+                    comparison,
+                    threshold));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
     }
 
-    private static IReadOnlyList<Violation> CheckPredicate(MetricRule rule, IReadOnlyList<ClassInfo> subjects) =>
-        subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: CountMetricCalculation.ValueOf(rule.Metric, classInfo)))
-            .Where(pair => !rule.Predicate!(pair.Value))
-            .Select(pair => (Violation)new MetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Kind,
-                pair.Value,
-                rule.Message!))
-            .ToArray();
+    private static IReadOnlyList<Violation> CheckPredicate(
+        MetricRule rule,
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
+    {
+        string metric = MetricWords.Count(rule.Metric.Kind);
 
-    private static IReadOnlyList<Violation> CheckPredicate(MetricRule rule, IReadOnlyList<FileInfo> subjects) =>
-        subjects
-            .Select(file => (File: file, Value: CountMetricCalculation.ValueOf(rule.Metric, file)))
-            .Where(pair => !rule.Predicate!(pair.Value))
-            .Select(pair => (Violation)new MetricViolation(
-                pair.File.Path,
-                null,
-                rule.Metric.Kind,
-                pair.Value,
-                rule.Message!))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            int value = CountMetricCalculation.ValueOf(rule.Metric, classInfo);
+            logger.Metric($"{metric} of {classInfo.Name}", value);
+            if (!rule.Predicate!(value))
+            {
+                violations.Add(new MetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Kind,
+                    value,
+                    rule.Message!));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
+    }
+
+    private static IReadOnlyList<Violation> CheckPredicate(
+        MetricRule rule,
+        IReadOnlyList<FileInfo> subjects,
+        CheckLogger logger)
+    {
+        string metric = MetricWords.Count(rule.Metric.Kind);
+
+        var violations = new List<Violation>();
+        foreach (FileInfo file in subjects)
+        {
+            int value = CountMetricCalculation.ValueOf(rule.Metric, file);
+            logger.Metric($"{metric} of {file.Path}", value);
+            if (!rule.Predicate!(value))
+            {
+                violations.Add(new MetricViolation(
+                    file.Path,
+                    null,
+                    rule.Metric.Kind,
+                    value,
+                    rule.Message!));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
+    }
 
     private static IReadOnlyList<Violation> CheckCustomThreshold(
         CustomMetricRule rule,
-        IReadOnlyList<ClassInfo> subjects)
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
     {
         MetricComparison comparison = rule.Comparison!.Value;
         int threshold = rule.Threshold!.Value;
 
-        return subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: rule.Metric.Calculate(classInfo)))
-            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
-            .Select(pair => (Violation)new CustomMetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Name,
-                rule.Metric.Description,
-                pair.Value,
-                comparison,
-                threshold))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            int value = rule.Metric.Calculate(classInfo);
+            logger.Metric($"{rule.Metric.Name} of {classInfo.Name}", value);
+            if (!SatisfiesThreshold(comparison, value, threshold))
+            {
+                violations.Add(new CustomMetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Name,
+                    rule.Metric.Description,
+                    value,
+                    comparison,
+                    threshold));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
     }
 
     private static IReadOnlyList<Violation> CheckCustomPredicate(
         CustomMetricRule rule,
-        IReadOnlyList<ClassInfo> subjects) =>
-        subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: rule.Metric.Calculate(classInfo)))
-            .Where(pair => !rule.Predicate!(pair.Value, pair.ClassInfo))
-            .Select(pair => (Violation)new CustomMetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Name,
-                rule.Metric.Description,
-                pair.Value,
-                rule.Message!))
-            .ToArray();
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
+    {
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            int value = rule.Metric.Calculate(classInfo);
+            logger.Metric($"{rule.Metric.Name} of {classInfo.Name}", value);
+            if (!rule.Predicate!(value, classInfo))
+            {
+                violations.Add(new CustomMetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Name,
+                    rule.Metric.Description,
+                    value,
+                    rule.Message!));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
+    }
 
     private static IReadOnlyList<Violation> CheckLcomThreshold(
         LcomMetricRule rule,
-        IReadOnlyList<ClassInfo> subjects)
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
     {
         MetricComparison comparison = rule.Comparison!.Value;
         double threshold = rule.Threshold!.Value;
+        string metric = MetricWords.Lcom(rule.Metric.Kind);
 
-        return subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: LcomCalculation.ValueOf(rule.Metric, classInfo)))
-            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
-            .Select(pair => (Violation)new LcomMetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Kind,
-                pair.Value,
-                comparison,
-                threshold))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            double value = LcomCalculation.ValueOf(rule.Metric, classInfo);
+            logger.Metric($"{metric} of {classInfo.Name}", value);
+            if (!SatisfiesThreshold(comparison, value, threshold))
+            {
+                violations.Add(new LcomMetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Kind,
+                    value,
+                    comparison,
+                    threshold));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
     }
 
     private static IReadOnlyList<Violation> CheckLcomPredicate(
         LcomMetricRule rule,
-        IReadOnlyList<ClassInfo> subjects) =>
-        subjects
-            .Select(classInfo => (ClassInfo: classInfo, Value: LcomCalculation.ValueOf(rule.Metric, classInfo)))
-            .Where(pair => !rule.Predicate!(pair.Value))
-            .Select(pair => (Violation)new LcomMetricViolation(
-                pair.ClassInfo.FilePath,
-                pair.ClassInfo.Name,
-                rule.Metric.Kind,
-                pair.Value,
-                rule.Message!))
-            .ToArray();
+        IReadOnlyList<ClassInfo> subjects,
+        CheckLogger logger)
+    {
+        string metric = MetricWords.Lcom(rule.Metric.Kind);
+
+        var violations = new List<Violation>();
+        foreach (ClassInfo classInfo in subjects)
+        {
+            double value = LcomCalculation.ValueOf(rule.Metric, classInfo);
+            logger.Metric($"{metric} of {classInfo.Name}", value);
+            if (!rule.Predicate!(value))
+            {
+                violations.Add(new LcomMetricViolation(
+                    classInfo.FilePath,
+                    classInfo.Name,
+                    rule.Metric.Kind,
+                    value,
+                    rule.Message!));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
+    }
 
     private static IReadOnlyList<Violation> CheckDistanceThreshold(
         DistanceMetricRule rule,
-        IReadOnlyList<DistanceInfo> subjects)
+        IReadOnlyList<DistanceInfo> subjects,
+        CheckLogger logger)
     {
         MetricComparison comparison = rule.Comparison!.Value;
         double threshold = rule.Threshold!.Value;
+        string metric = MetricWords.Distance(rule.Metric.Kind);
 
-        return subjects
-            .Select(info => (Info: info, Value: DistanceCalculation.ValueOf(rule.Metric, info)))
-            .Where(pair => !SatisfiesThreshold(comparison, pair.Value, threshold))
-            .Select(pair => (Violation)new DistanceMetricViolation(
-                pair.Info.File,
-                rule.Metric.Kind,
-                pair.Value,
-                comparison,
-                threshold))
-            .ToArray();
+        var violations = new List<Violation>();
+        foreach (DistanceInfo info in subjects)
+        {
+            double value = DistanceCalculation.ValueOf(rule.Metric, info);
+            logger.Metric($"{metric} of {info.File}", value);
+            if (!SatisfiesThreshold(comparison, value, threshold))
+            {
+                violations.Add(new DistanceMetricViolation(
+                    info.File,
+                    rule.Metric.Kind,
+                    value,
+                    comparison,
+                    threshold));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
     }
 
     private static IReadOnlyList<Violation> CheckDistancePredicate(
         DistanceMetricRule rule,
-        IReadOnlyList<DistanceInfo> subjects) =>
-        subjects
-            .Select(info => (Info: info, Value: DistanceCalculation.ValueOf(rule.Metric, info)))
-            .Where(pair => !rule.Predicate!(pair.Value))
-            .Select(pair => (Violation)new DistanceMetricViolation(
-                pair.Info.File,
-                rule.Metric.Kind,
-                pair.Value,
-                rule.Message!))
-            .ToArray();
+        IReadOnlyList<DistanceInfo> subjects,
+        CheckLogger logger)
+    {
+        string metric = MetricWords.Distance(rule.Metric.Kind);
+
+        var violations = new List<Violation>();
+        foreach (DistanceInfo info in subjects)
+        {
+            double value = DistanceCalculation.ValueOf(rule.Metric, info);
+            logger.Metric($"{metric} of {info.File}", value);
+            if (!rule.Predicate!(value))
+            {
+                violations.Add(new DistanceMetricViolation(
+                    info.File,
+                    rule.Metric.Kind,
+                    value,
+                    rule.Message!));
+            }
+        }
+
+        logger.Violations(violations);
+        return violations;
+    }
 
     /// <summary>
     /// A rule's file-level subjects as distance infos: the files the scope's file selectors name,

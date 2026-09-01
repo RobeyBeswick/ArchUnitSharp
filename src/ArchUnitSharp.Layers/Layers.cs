@@ -81,7 +81,7 @@ public sealed class Layers : ICheckable
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
     /// <returns>The violations found; empty when the policy passed.</returns>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        Assertion.LayersAssertion.Check(this, options);
+        CheckLogging.Run(options, logger => Assertion.LayersAssertion.Check(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

@@ -2,15 +2,16 @@ namespace ArchUnitSharp.Common.Extraction;
 
 /// <summary>
 /// The options bag passed to <see cref="ICheckable.Check"/>: what the empty-test guard allows, how
-/// much a check logs, whether the extraction cache is bypassed, and the C#-specific analysis
-/// toggles. A single bag with defaults; <see langword="null"/> at the call site means these
-/// defaults.
+/// much a check logs and where it logs to, whether the extraction cache is bypassed, and the
+/// C#-specific analysis toggles. A single bag with defaults; <see langword="null"/> at the call site
+/// means these defaults.
 /// </summary>
 /// <remarks>
 /// <para>
 /// Every property defaults to the least surprising value for a rule run: the empty-test guard is on
 /// (<see cref="AllowEmptyTests"/> is <see langword="false"/>), logging is off
-/// (<see cref="Logging"/> is <see cref="LoggingLevel.None"/>), the cache is used
+/// (<see cref="Logging"/> is <see cref="LoggingLevel.None"/>) and writes no file
+/// (<see cref="LogFile"/> is <see langword="null"/>), the cache is used
 /// (<see cref="ClearCache"/> is <see langword="false"/>), and every analysis toggle is off.
 /// </para>
 /// <para>
@@ -32,6 +33,14 @@ public sealed record CheckOptions
     /// logging at all.
     /// </summary>
     public LoggingLevel Logging { get; init; }
+
+    /// <summary>
+    /// The optional file a check's log is written to, or <see langword="null"/> (the default) for no
+    /// file output. When set, a check writes its log lines to a timestamped file in the configured
+    /// directory, creating it when it does not exist, so a CI run can archive the log as a build
+    /// artifact.
+    /// </summary>
+    public LogFileOptions? LogFile { get; init; }
 
     /// <summary>
     /// When <see langword="true"/>, the extraction cache is bypassed so the graph is rebuilt from

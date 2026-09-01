@@ -143,7 +143,7 @@ public sealed class DependOn : ICheckable
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.DependOn(this, options);
+        CheckLogging.Run(options, logger => FilesAssertion.DependOn(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

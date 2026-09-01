@@ -29,6 +29,13 @@ using ArchUnitSharp.Layers.Projection;
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
 /// </para>
+/// <para>
+/// Each assertion is handed the check's <see cref="CheckLogger"/> by the terminal that calls it and
+/// emits the fixed logging vocabulary: every constraint is a <c>start check</c> naming the rule, the
+/// cross-layer dependencies the policy projects are progress, and every violation is logged as it is
+/// produced. The logger only buffers lines — the assertion never touches the filesystem — and the
+/// terminal's wrapper records the check's end and flushes the log after the assertion returns.
+/// </para>
 /// </remarks>
 internal static class LayersAssertion
 {
@@ -39,13 +46,19 @@ internal static class LayersAssertion
     /// </summary>
     /// <param name="layers">The policy to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the policy passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="layers"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> Check(Layers layers, CheckOptions? options)
+    public static IReadOnlyList<Violation> Check(
+        Layers layers,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(layers);
+        logger ??= CheckLogger.Create(null);
 
         IReadOnlyList<LayerConstraint> constraints = layers.Constraints;
+        logger.Progress($"checking {constraints.Count} layer rule(s)");
         var blocked = new HashSet<LayerViolation>();
         var result = new List<Violation>();
 
@@ -56,7 +69,7 @@ internal static class LayersAssertion
                 continue;
             }
 
-            IReadOnlyList<Violation> violations = CheckConstraint(layers, constraint, options);
+            IReadOnlyList<Violation> violations = CheckConstraint(layers, constraint, options, logger);
             foreach (Violation violation in violations)
             {
                 if (violation is LayerViolation layerViolation)
@@ -75,7 +88,7 @@ internal static class LayersAssertion
                 continue;
             }
 
-            IReadOnlyList<Violation> violations = CheckConstraint(layers, constraint, options);
+            IReadOnlyList<Violation> violations = CheckConstraint(layers, constraint, options, logger);
             foreach (Violation violation in violations)
             {
                 if (violation is LayerViolation layerViolation && blocked.Contains(layerViolation))
@@ -98,15 +111,21 @@ internal static class LayersAssertion
     /// <param name="layers">The policy the constraint belongs to. Must not be <see langword="null"/>.</param>
     /// <param name="constraint">The constraint to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the constraint passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="layers"/> or <paramref name="constraint"/> is <see langword="null"/>.</exception>
     public static IReadOnlyList<Violation> CheckConstraint(
         Layers layers,
         LayerConstraint constraint,
-        CheckOptions? options)
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(layers);
         ArgumentNullException.ThrowIfNull(constraint);
+        logger ??= CheckLogger.Create(null);
+
+        string rule = constraint.DescribeRule();
+        logger.StartCheck(rule);
 
         Graph graph = layers.Graph;
         IReadOnlyList<LayerDeclaration> declarations = layers.Declarations;
@@ -114,23 +133,28 @@ internal static class LayersAssertion
 
         if (LayersProjection.FilesOfLayer(graph, declarations, subjectLayer).Count == 0)
         {
-            return EmptyTestGuard.Guard(constraint.DescribeRule(), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         string[] targets = constraint.TargetLayers.ToArray();
         if (targets.Length > 0
             && targets.All(name => LayersProjection.FilesOfLayer(graph, declarations, name).Count == 0))
         {
-            return EmptyTestGuard.Guard(constraint.DescribeRule(), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<CrossLayerDependency> dependencies =
             LayersProjection.CrossLayerDependencies(graph, declarations);
+        logger.Progress($"projected {dependencies.Count} cross-layer dependencies");
 
         var targetSet = new HashSet<string>(targets, StringComparer.Ordinal);
         bool sealedLayer = !constraint.Negate && targets.Length == 0;
 
-        return dependencies
+        Violation[] violations = dependencies
             .Where(dependency =>
                 dependency.SourceLayer == subjectLayer
                 && (constraint.Negate
@@ -142,5 +166,7 @@ internal static class LayersAssertion
                 dependency.Source,
                 dependency.Target))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 }

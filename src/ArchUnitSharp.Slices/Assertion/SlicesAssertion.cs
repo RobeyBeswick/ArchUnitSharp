@@ -40,6 +40,13 @@ using ArchUnitSharp.Slices.Projection;
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
 /// </para>
+/// <para>
+/// Each assertion is handed the check's <see cref="CheckLogger"/> by the terminal that calls it and
+/// emits the fixed logging vocabulary: every rule is a <c>start check</c> naming the rule, the
+/// dependency edges the slicing projects are progress, and every violation is logged as it is
+/// produced. The logger only buffers lines — the assertion never touches the filesystem — and the
+/// terminal's wrapper records the check's end and flushes the log after the assertion returns.
+/// </para>
 /// </remarks>
 internal static class SlicesAssertion
 {
@@ -49,21 +56,26 @@ internal static class SlicesAssertion
     /// </summary>
     /// <param name="slices">The policy to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the policy passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="slices"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> Check(Slices slices, CheckOptions? options)
+    public static IReadOnlyList<Violation> Check(
+        Slices slices,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(slices);
+        logger ??= CheckLogger.Create(null);
 
         var result = new List<Violation>();
         foreach (SliceRule rule in slices.Rules)
         {
-            result.AddRange(CheckRule(slices, rule, options));
+            result.AddRange(CheckRule(slices, rule, options, logger));
         }
 
         foreach (DiagramRule rule in slices.DiagramRules)
         {
-            result.AddRange(CheckDiagramRule(slices, rule, options));
+            result.AddRange(CheckDiagramRule(slices, rule, options, logger));
         }
 
         return result;
@@ -77,35 +89,51 @@ internal static class SlicesAssertion
     /// <param name="slices">The policy the rule belongs to. Must not be <see langword="null"/>.</param>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="slices"/> or <paramref name="rule"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> CheckRule(Slices slices, SliceRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> CheckRule(
+        Slices slices,
+        SliceRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(slices);
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeRule(slices, rule);
+        logger.StartCheck(description);
 
         if (SlicesProjection.SlicedFiles(slices.Graph, slices.Definitions).Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeRule(slices, rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         if (SlicesProjection.FilesOf(slices.Graph, slices.Definitions, rule.From).Count == 0
             || SlicesProjection.MatchingFiles(slices.Graph, rule.To).Count == 0)
         {
-            return EmptyTestGuard.Guard(DescribeRule(slices, rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<SliceDependency> dependencies =
             SlicesProjection.Dependencies(slices.Graph, slices.Definitions, rule.From, rule.To);
+        logger.Progress($"projected {dependencies.Count} dependency edge(s)");
 
         if (rule.Negate)
         {
-            return dependencies
+            Violation[] violations = dependencies
                 .Select(static dependency => (Violation)new ForbiddenDependencyViolation(
                     dependency.Slice,
                     dependency.Source,
                     dependency.Target))
                 .ToArray();
+            logger.Violations(violations);
+            return violations;
         }
 
         IReadOnlyList<string> sliceNames = SlicesProjection.Slices(slices.Graph, slices.Definitions);
@@ -113,13 +141,15 @@ internal static class SlicesAssertion
             dependencies.Select(static dependency => dependency.Slice),
             StringComparer.Ordinal);
 
-        return sliceNames
+        Violation[] missing = sliceNames
             .Where(slice => !contained.Contains(slice))
             .Select(slice => (Violation)new MissingDependencyViolation(
                 slice,
                 rule.From.Pattern.Glob,
                 rule.To.Pattern.Glob))
             .ToArray();
+        logger.Violations(missing);
+        return missing;
     }
 
     /// <summary>
@@ -133,28 +163,42 @@ internal static class SlicesAssertion
     /// <param name="slices">The policy the rule belongs to. Must not be <see langword="null"/>.</param>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="slices"/> or <paramref name="rule"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> CheckDiagramRule(Slices slices, DiagramRule rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> CheckDiagramRule(
+        Slices slices,
+        DiagramRule rule,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(slices);
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
+
+        string description = DescribeDiagramRule(slices, rule);
+        logger.StartCheck(description);
 
         if (SlicesProjection.SlicedFiles(slices.Graph, slices.Definitions).Count == 0
             || (rule.Diagram.Components.Count == 0 && rule.Diagram.Dependencies.Count == 0))
         {
-            return EmptyTestGuard.Guard(DescribeDiagramRule(slices, rule), options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<ProjectedEdge> edges = Projection.Edges(
             slices.Graph,
             SlicesProjection.DiagramMap(identifier => SlicesProjection.SliceOf(slices.Definitions, identifier)));
+        logger.Progress($"projected {edges.Count} dependency edge(s)");
 
-        return edges
+        Violation[] violations = edges
             .Where(edge => !Ignored(edge, rule))
             .Where(edge => !rule.Diagram.Allows(edge.Source, edge.Target))
             .Select(static edge => (Violation)new DiagramAdherenceViolation(edge.Source, edge.Target))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 
     /// <summary>

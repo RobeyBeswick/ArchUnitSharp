@@ -1,5 +1,44 @@
 # NOTES
 
+WHY: Test-critic round 6, Issue 39 — the proposed `BeInPath("src/Models")` logging test is added with
+the glob widened to `"src/Models/*.cs"`: a Path-target glob is anchored (`RegexFactory` compiles `^…$`),
+so `src/Models` matches the whole identifier only and can never match `src/Models/Car.cs` — the rule
+would report 2 violations, not the 0 the finding asserts. `"src/Models/*.cs"` matches both files so the
+test keeps the finding's intended `0 violation(s)` end line while still pinning the same start/progress
+lines and still failing if the `CheckLogging.Run` wrapper is dropped from `FilesPathRule.Check` (no log
+file is written at all).
+
+WHY: Round 5 — the correctness review (39-review-1) returned no verdict (crash or timeout) with no
+code findings; the FIX it proposed was to re-run and, if the crash repeats, to suspect the diff was
+too large to review in one pass. The re-run of the whole gate is clean (build 0 warnings, 0 errors,
+format --verify-no-changes, all test projects pass, nothing removed or skipped, no vulnerable
+packages) and the code diff is 37 files / ~2200 lines, the same order as prior reviewed rounds — this
+is the reviewer-tooling hang class documented in Rounds 2, 3 and 4, not a code defect. The test
+critic's findings were real and are addressed: integration logging tests now run Layers, Slices and
+Graph through their public `Check` with `Logging = Debug` and a `LogFile`, asserting the start-check,
+progress, violation and end-check lines, plus one zero-match rule per module pinning the
+EmptyTestViolation rule-description line in the guard branches; the Files and Metrics logging suites
+are extended to the remaining terminals the critic named (AdhereTo, HaveNoCycles, BeInFolder, DependOn,
+DependOnExternalModules for Files; CustomMetricRule, LcomMetricRule, DistanceMetricRule,
+DistanceZoneRule for Metrics).
+
+WHY: Issue 39 — the levels are `None/Debug/Info/Warn/Error`, redefining the `None/Normal/Verbose`
+placeholder that issue 11 had seeded onto `CheckOptions.Logging` before any logger existed; the issue
+fixes the level vocabulary (debug / info / warn / error) and nothing consumed the old values. A
+violation is a `Warn` line, a check's start and end and each metric are `Info` lines, and progress is
+a `Debug` line; `Error` records nothing from the fixed check vocabulary because a technical failure
+is raised as a `TechnicalError` exception, not logged — the level exists so a caller can set an
+error-only threshold.
+
+WHY: Issue 39 — the file sink (auto-created directory, timestamped filename, append-vs-overwrite) and
+the UTC timestamp it names the file with live in `Common`, the kernel, because `CheckOptions` — the
+threading mechanism the issue demands — lives there and every module's terminal must be able to reach
+the sink without a new dependency. The buffering half of the logger is pure (verbs append formatted
+lines to an in-memory list, so the pure `Assertion` layers never touch the filesystem) and the write
+runs on `Flush`, which the terminal's shared `CheckLogging.Run` wrapper invokes after the check — the
+same surface-side file-write boundary the graph report's `export as ...(path)` and the metrics
+exporter use. The filename timestamp is UTC, matching the metrics exporter's report timestamp.
+
 WHY: Issue 38 — the `except` companion ships on the files module's scope selectors and depend-on
 object selectors (`WithName`, `InFolder`, `InPath`, `InFile`, `Matching`) and the metrics module's
 file and class selectors (`WithName`, `InFolder`, `InPath`, `ForClassesMatching`) only. The layers

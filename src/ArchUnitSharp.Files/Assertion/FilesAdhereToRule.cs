@@ -50,7 +50,9 @@ internal sealed class FilesAdhereToRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.AdhereTo(_files, _predicate, _message, _negate, options);
+        CheckLogging.Run(
+            options,
+            logger => FilesAssertion.AdhereTo(_files, _predicate, _message, _negate, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

@@ -37,7 +37,9 @@ internal sealed class FilesPathRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.BeInPath(_files, _filter, _negate, options);
+        CheckLogging.Run(
+            options,
+            logger => FilesAssertion.BeInPath(_files, _filter, _negate, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

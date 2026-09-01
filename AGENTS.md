@@ -120,8 +120,9 @@ boolean result. An empty list means the rule passed.
 
 `ICheckable { Check(CheckOptions?) -> IReadOnlyList<Violation> }` is the seam the whole library hangs
 from. Every terminal implements it; every consumer programs against it and nothing else.
-`CheckOptions` carries `AllowEmptyTests`, `Logging`, `ClearCache`, and any C#-specific analysis
-toggles. Options are a bag with defaults; `Check(null)` means defaults.
+`CheckOptions` carries `AllowEmptyTests`, `Logging` and `LogFile` (the check's log level and its
+optional file output), `ClearCache`, and any C#-specific analysis toggles. Options are a bag with
+defaults; `Check(null)` means defaults.
 
 ## Async
 

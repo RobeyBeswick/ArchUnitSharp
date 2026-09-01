@@ -221,13 +221,24 @@ public sealed class GraphReport : ICheckable
     /// <returns>The violations found; empty when the scope matched some files or empty tests are allowed.</returns>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null)
     {
-        IReadOnlyList<string> scope = GraphProjection.Select(_graph, _options);
-        if (scope.Count == 0)
+        CheckOptions effective = options ?? _options.CheckOptions;
+        return CheckLogging.Run(effective, logger =>
         {
-            return EmptyTestGuard.Guard(DescribeScope(), options ?? _options.CheckOptions);
-        }
+            string description = DescribeScope();
+            logger.StartCheck(description);
 
-        return Array.Empty<Violation>();
+            IReadOnlyList<string> scope = GraphProjection.Select(_graph, _options);
+            logger.Progress($"scope matched {scope.Count} file(s)");
+
+            if (scope.Count == 0)
+            {
+                IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, effective);
+                logger.Violations(empty);
+                return empty;
+            }
+
+            return Array.Empty<Violation>();
+        });
     }
 
     /// <inheritdoc/>

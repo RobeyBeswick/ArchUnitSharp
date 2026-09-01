@@ -37,7 +37,9 @@ internal sealed class FilesNameRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.HaveName(_files, _filter, _negate, options);
+        CheckLogging.Run(
+            options,
+            logger => FilesAssertion.HaveName(_files, _filter, _negate, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

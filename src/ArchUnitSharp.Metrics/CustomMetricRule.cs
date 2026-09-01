@@ -93,7 +93,7 @@ internal sealed class CustomMetricRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        Assertion.MetricsAssertion.Check(this, options);
+        CheckLogging.Run(options, logger => Assertion.MetricsAssertion.Check(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

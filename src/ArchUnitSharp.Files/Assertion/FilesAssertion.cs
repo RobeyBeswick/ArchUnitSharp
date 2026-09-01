@@ -43,6 +43,13 @@ using ArchUnitSharp.Files.Projection;
 /// <para>
 /// This type is stateless and safe for concurrent use. The lists it returns are fresh copies.
 /// </para>
+/// <para>
+/// Each assertion is handed the check's <see cref="CheckLogger"/> by the terminal that calls it and
+/// emits the fixed logging vocabulary: the rule being checked starts on entry, the number of files
+/// the scope selected is progress, and every violation the rule reports is logged as it is produced.
+/// The logger only buffers lines — the assertion never touches the filesystem — and the terminal's
+/// wrapper records the check's end and flushes the log after the assertion returns.
+/// </para>
 /// </remarks>
 internal static class FilesAssertion
 {
@@ -54,18 +61,29 @@ internal static class FilesAssertion
     /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
     /// </param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> Exist(Files files, bool negate, CheckOptions? options)
+    public static IReadOnlyList<Violation> Exist(
+        Files files,
+        bool negate,
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(files);
+        logger ??= CheckLogger.Create(null);
+
+        string rule = $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} exist";
+        logger.StartCheck(rule);
 
         IReadOnlyList<string> selected = files.Select();
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            string rule = $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} exist";
-            return EmptyTestGuard.Guard(rule, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         if (!negate)
@@ -73,9 +91,11 @@ internal static class FilesAssertion
             return new Violation[0];
         }
 
-        return selected
+        Violation[] violations = selected
             .Select(static file => (Violation)new FileViolation(file))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 
     /// <summary>
@@ -86,23 +106,35 @@ internal static class FilesAssertion
     /// </summary>
     /// <param name="files">The selection the rule asserts over. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> Cycles(Files files, CheckOptions? options)
+    public static IReadOnlyList<Violation> Cycles(Files files, CheckOptions? options, CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(files);
+        logger ??= CheckLogger.Create(null);
+
+        string rule = $"{files.DescribeScope()} should have no cycles";
+        logger.StartCheck(rule);
 
         IReadOnlyList<string> selected = files.Select();
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            string rule = $"{files.DescribeScope()} should have no cycles";
-            return EmptyTestGuard.Guard(rule, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
-        return files.Cycles()
+        IReadOnlyList<IReadOnlyList<string>> cycles = files.Cycles();
+        logger.Progress($"projected {cycles.Count} cycle(s)");
+
+        Violation[] violations = cycles
             .Select(static cycle => (Violation)new CycleViolation(cycle))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 
     /// <summary>
@@ -119,10 +151,16 @@ internal static class FilesAssertion
     /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
     /// </param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/> or <paramref name="filter"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> HaveName(Files files, Filter filter, bool negate, CheckOptions? options) =>
-        Match(files, filter, "have name", negate, options);
+    public static IReadOnlyList<Violation> HaveName(
+        Files files,
+        Filter filter,
+        bool negate,
+        CheckOptions? options,
+        CheckLogger? logger = null) =>
+        Match(files, filter, "have name", negate, options, logger);
 
     /// <summary>
     /// Checks a <c>should be in folder</c> / <c>should not be in folder</c> rule over <paramref name="files"/>:
@@ -138,10 +176,16 @@ internal static class FilesAssertion
     /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
     /// </param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/> or <paramref name="filter"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> BeInFolder(Files files, Filter filter, bool negate, CheckOptions? options) =>
-        Match(files, filter, "be in folder", negate, options);
+    public static IReadOnlyList<Violation> BeInFolder(
+        Files files,
+        Filter filter,
+        bool negate,
+        CheckOptions? options,
+        CheckLogger? logger = null) =>
+        Match(files, filter, "be in folder", negate, options, logger);
 
     /// <summary>
     /// Checks a <c>should be in path</c> / <c>should not be in path</c> rule over <paramref name="files"/>:
@@ -157,10 +201,16 @@ internal static class FilesAssertion
     /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
     /// </param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/> or <paramref name="filter"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> BeInPath(Files files, Filter filter, bool negate, CheckOptions? options) =>
-        Match(files, filter, "be in path", negate, options);
+    public static IReadOnlyList<Violation> BeInPath(
+        Files files,
+        Filter filter,
+        bool negate,
+        CheckOptions? options,
+        CheckLogger? logger = null) =>
+        Match(files, filter, "be in path", negate, options, logger);
 
     /// <summary>
     /// Checks a <c>should adhere to</c> / <c>should not adhere to</c> rule over <paramref name="files"/>:
@@ -178,6 +228,7 @@ internal static class FilesAssertion
     /// <see langword="false"/> for the positive mood, <see langword="true"/> for the negated mood.
     /// </param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="files"/>, <paramref name="predicate"/> or <paramref name="message"/> is <see langword="null"/>.</exception>
     /// <exception cref="UserError"><paramref name="files"/> was built without a source provider, so a selected file's source text is unavailable.</exception>
@@ -186,25 +237,34 @@ internal static class FilesAssertion
         Func<FileDetail, bool> predicate,
         string message,
         bool negate,
-        CheckOptions? options)
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(predicate);
         ArgumentNullException.ThrowIfNull(message);
+        logger ??= CheckLogger.Create(null);
+
+        string rule =
+            $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} adhere to '{message}'";
+        logger.StartCheck(rule);
 
         IReadOnlyList<string> selected = files.Select();
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            string rule =
-                $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} adhere to '{message}'";
-            return EmptyTestGuard.Guard(rule, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
-        return selected
+        Violation[] violations = selected
             .Where(identifier => predicate(files.FileDetailOf(identifier)) == negate)
             .Select(identifier => (Violation)new AdhereToViolation(identifier, message))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 
     /// <summary>
@@ -217,40 +277,53 @@ internal static class FilesAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
-    public static IReadOnlyList<Violation> DependOn(DependOn rule, CheckOptions? options)
+    public static IReadOnlyList<Violation> DependOn(DependOn rule, CheckOptions? options, CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
 
         Files files = rule.Subject;
+        string description =
+            $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
+        logger.StartCheck(description);
+
         IReadOnlyList<string> subject = files.Select();
+        logger.Progress($"selected {subject.Count} file(s)");
         IReadOnlyList<string> objects = FilesProjection.Select(files.Graph, rule.ObjectFilters);
+        logger.Progress($"object matched {objects.Count} file(s)");
 
         if (subject.Count == 0 || objects.Count == 0)
         {
-            string description =
-                $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
-            return EmptyTestGuard.Guard(description, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<Edge> dependencies =
             FilesProjection.Dependencies(files.Graph, files.Filters, rule.ObjectFilters);
+        logger.Progress($"projected {dependencies.Count} dependency edge(s)");
 
         if (rule.Negate)
         {
-            return dependencies
+            Violation[] violations = dependencies
                 .Select(static edge => (Violation)new DependencyViolation(edge.Source, edge.Target))
                 .ToArray();
+            logger.Violations(violations);
+            return violations;
         }
 
         var satisfied = new HashSet<string>(
             dependencies.Select(static edge => edge.Source),
             StringComparer.Ordinal);
-        return subject
+        Violation[] missing = subject
             .Where(file => !satisfied.Contains(file))
             .Select(static file => (Violation)new FileViolation(file))
             .ToArray();
+        logger.Violations(missing);
+        return missing;
     }
 
     /// <summary>
@@ -264,42 +337,56 @@ internal static class FilesAssertion
     /// </summary>
     /// <param name="rule">The rule to check. Must not be <see langword="null"/>.</param>
     /// <param name="options">The options to check with; <see langword="null"/> means the defaults in <see cref="CheckOptions"/>.</param>
+    /// <param name="logger">The check's logger, created by the terminal; <see langword="null"/> means the check logs nothing.</param>
     /// <returns>The violations found; empty when the rule passed.</returns>
     /// <exception cref="ArgumentNullException"><paramref name="rule"/> is <see langword="null"/>.</exception>
     public static IReadOnlyList<Violation> DependOnExternalModules(
         DependOnExternalModules rule,
-        CheckOptions? options)
+        CheckOptions? options,
+        CheckLogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(rule);
+        logger ??= CheckLogger.Create(null);
 
         Files files = rule.Subject;
+        string description =
+            $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
+        logger.StartCheck(description);
+
         IReadOnlyList<string> subject = files.Select();
+        logger.Progress($"selected {subject.Count} file(s)");
         IReadOnlyList<string> modules = FilesProjection.ExternalModules(files.Graph, rule.ObjectFilters);
+        logger.Progress($"object matched {modules.Count} external module(s)");
 
         if (subject.Count == 0 || modules.Count == 0)
         {
-            string description =
-                $"{files.DescribeScope()} should{(rule.Negate ? " not" : string.Empty)} depend on {rule.DescribeObject()}";
-            return EmptyTestGuard.Guard(description, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(description, options);
+            logger.Violations(empty);
+            return empty;
         }
 
         IReadOnlyList<Edge> dependencies =
             FilesProjection.ExternalDependencies(files.Graph, files.Filters, rule.ObjectFilters);
+        logger.Progress($"projected {dependencies.Count} dependency edge(s)");
 
         if (rule.Negate)
         {
-            return dependencies
+            Violation[] violations = dependencies
                 .Select(static edge => (Violation)new DependencyViolation(edge.Source, edge.Target))
                 .ToArray();
+            logger.Violations(violations);
+            return violations;
         }
 
         var satisfied = new HashSet<string>(
             dependencies.Select(static edge => edge.Source),
             StringComparer.Ordinal);
-        return subject
+        Violation[] missing = subject
             .Where(file => !satisfied.Contains(file))
             .Select(static file => (Violation)new FileViolation(file))
             .ToArray();
+        logger.Violations(missing);
+        return missing;
     }
 
     private static IReadOnlyList<Violation> Match(
@@ -307,23 +394,32 @@ internal static class FilesAssertion
         Filter filter,
         string predicatePhrase,
         bool negate,
-        CheckOptions? options)
+        CheckOptions? options,
+        CheckLogger? logger)
     {
         ArgumentNullException.ThrowIfNull(files);
         ArgumentNullException.ThrowIfNull(filter);
+        logger ??= CheckLogger.Create(null);
+
+        string rule =
+            $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} {predicatePhrase} '{filter.Pattern.Glob}'";
+        logger.StartCheck(rule);
 
         IReadOnlyList<string> selected = files.Select();
+        logger.Progress($"selected {selected.Count} file(s)");
 
         if (selected.Count == 0)
         {
-            string rule =
-                $"{files.DescribeScope()} should{(negate ? " not" : string.Empty)} {predicatePhrase} '{filter.Pattern.Glob}'";
-            return EmptyTestGuard.Guard(rule, options);
+            IReadOnlyList<Violation> empty = EmptyTestGuard.Guard(rule, options);
+            logger.Violations(empty);
+            return empty;
         }
 
-        return selected
+        Violation[] violations = selected
             .Where(file => filter.Matches(file) == negate)
             .Select(static file => (Violation)new FileViolation(file))
             .ToArray();
+        logger.Violations(violations);
+        return violations;
     }
 }

@@ -93,7 +93,7 @@ internal sealed class DistanceMetricRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        Assertion.MetricsAssertion.CheckDistance(this, options);
+        CheckLogging.Run(options, logger => Assertion.MetricsAssertion.CheckDistance(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

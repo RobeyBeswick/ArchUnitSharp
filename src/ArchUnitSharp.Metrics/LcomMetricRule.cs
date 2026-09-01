@@ -93,7 +93,7 @@ internal sealed class LcomMetricRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        Assertion.MetricsAssertion.CheckLcom(this, options);
+        CheckLogging.Run(options, logger => Assertion.MetricsAssertion.CheckLcom(this, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

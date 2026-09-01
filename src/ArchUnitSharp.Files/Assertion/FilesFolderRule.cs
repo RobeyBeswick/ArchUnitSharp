@@ -37,7 +37,9 @@ internal sealed class FilesFolderRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.BeInFolder(_files, _filter, _negate, options);
+        CheckLogging.Run(
+            options,
+            logger => FilesAssertion.BeInFolder(_files, _filter, _negate, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

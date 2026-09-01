@@ -34,7 +34,7 @@ internal sealed class FilesExistRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.Exist(_files, _negate, options);
+        CheckLogging.Run(options, logger => FilesAssertion.Exist(_files, _negate, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()

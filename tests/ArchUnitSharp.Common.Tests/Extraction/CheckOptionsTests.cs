@@ -13,6 +13,7 @@ public class CheckOptionsTests
 
         Assert.False(options.AllowEmptyTests);
         Assert.Equal(LoggingLevel.None, options.Logging);
+        Assert.Null(options.LogFile);
         Assert.False(options.ClearCache);
         Assert.False(options.IgnoreTestCode);
         Assert.False(options.IgnoreGeneratedCode);
@@ -24,14 +25,17 @@ public class CheckOptionsTests
         var options = new CheckOptions
         {
             AllowEmptyTests = true,
-            Logging = LoggingLevel.Verbose,
+            Logging = LoggingLevel.Warn,
+            LogFile = new LogFileOptions { Directory = "logs", FileNamePrefix = "suite", Append = true },
             ClearCache = true,
             IgnoreTestCode = true,
             IgnoreGeneratedCode = true,
         };
 
         Assert.True(options.AllowEmptyTests);
-        Assert.Equal(LoggingLevel.Verbose, options.Logging);
+        Assert.Equal(LoggingLevel.Warn, options.Logging);
+        Assert.Equal("logs", options.LogFile!.Directory);
+        Assert.True(options.LogFile.Append);
         Assert.True(options.ClearCache);
         Assert.True(options.IgnoreTestCode);
         Assert.True(options.IgnoreGeneratedCode);

@@ -25,7 +25,7 @@ internal sealed class FilesCyclesRule : ICheckable
 
     /// <inheritdoc/>
     public IReadOnlyList<Violation> Check(CheckOptions? options = null) =>
-        FilesAssertion.Cycles(_files, options);
+        CheckLogging.Run(options, logger => FilesAssertion.Cycles(_files, options, logger));
 
     /// <inheritdoc/>
     void ICheckable.ProhibitExternalImplementation()
