@@ -92,6 +92,37 @@ diff is 7 files / ~260 lines — far too small for "too large to review in one p
 reviewer-tooling hang class documented in Rounds 2, 3, 4 and 5, not a code defect; there is nothing
 to fix.
 
+## Issue 40 — dogfood
+
+The dogfood suite issue 40 asks for was already on `main` when this issue was implemented: the
+previous attempt (`abandoned/issue-40`, WIP `a9ee471`) was folded into the tree by issue 43's CI
+landing (`fad8a26`), so the issue's premise that the suite is absent does not hold — there was nothing
+to build from scratch, only the outstanding review findings to land. Both, in
+`tests/ArchUnitSharp.Dogfood.Tests/DogfoodArchitectureTests.cs`:
+
+- The external half of "common depends on nothing but the standard library and the analysis
+  toolchain" was unenforced: the old rule's object was scoped to `src/**`, so a third-party `using`
+  in a Common file (an external edge no selector matches) passed silently. Added
+  `Common_depends_on_no_external_module_outside_the_standard_library_and_the_analysis_toolchain`:
+  `InFolder("src/ArchUnitSharp.Common/**").ShouldNot().DependOnExternalModules().Matching("*")
+  .Except("System.*").Except("Microsoft.CodeAnalysis.*")` — a non-stdlib, non-toolchain import in
+  Common is a `DependencyViolation`. The old test is renamed
+  `Common_depends_on_no_other_module_in_the_library` so its name states only the internal half it
+  checks. The rule's object is the whole graph's external modules (the shared projection is
+  graph-wide); it stays non-empty because the `tests` tree references `Xunit`/`Xunit.Sdk`, so the
+  empty-test guard does not turn the rule into a silent pass.
+- The fixture only asserted file presence, so a graph with all files but no dependency edges passed
+  every rule. `The_dogfood_suite_sees_the_librarys_own_source` now also asserts the known true edge
+  `src/ArchUnitSharp/Project.cs` → `src/ArchUnitSharp.Common/**` (Project.cs imports
+  `ArchUnitSharp.Common.Extraction`), which fails if non-self edges are dropped.
+
+WHY: The issue names "no cycles" and the suite covers it at module granularity (the
+`MayOnlyDependOnLayers` allowlist, a complete acyclicity witness) rather than the file-level
+`should have no cycles` terminal, because the file-level graph of the library's own source contains a
+15-file strongly connected component inside `src/ArchUnitSharp.Metrics` that is Johnson's exponential
+worst case — the decision and its rationale are already recorded in the Issue 43 note above, and this
+issue inherits it unchanged.
+
 WHY: Issue 43 — CI lands as `.github/workflows/ci.yml` with three jobs — `build` (restore, build,
 `dotnet format --verify-no-changes` as the linter), `test` (the whole solution, which includes the
 dogfood suite), and a dedicated `dogfood` job running `tests/ArchUnitSharp.Dogfood.Tests` explicitly,
